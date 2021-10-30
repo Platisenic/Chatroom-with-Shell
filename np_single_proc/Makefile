@@ -5,7 +5,7 @@ LIBDIR = lib
 
 SRCS   = $(basename $(notdir $(wildcard lib/*.cpp)))
 OBJS := $(SRCS:%=obj/%.o)
-EXEC   = np_simple
+EXEC   = np_single_proc
 
 .PHONY: prepare clean all run
 
@@ -22,15 +22,5 @@ clean:
 	rm -rf $(OBJDIR)/* $(EXEC)
 
 run: all
-	./$(EXEC) 3334
-
-prepare:
-	mkdir -p bin
-	mkdir -p obj
-	cp `which ls` bin/ls
-	cp `which cat` bin/cat
-	g++ commands/noop.cpp -o bin/noop
-	g++ commands/number.cpp -o bin/number
-	g++ commands/removetag0.cpp -o bin/removetag0
-	g++ commands/removetag.cpp -o bin/removetag
+	./$(EXEC) 3335
 

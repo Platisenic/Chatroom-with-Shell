@@ -10,7 +10,10 @@
 #include <sys/wait.h>
 
 int main(int argc, char const *argv[]){
-	if (argc != 2) fprintf(stderr, "Usage: %s [port]\n", argv[0]);
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s [port]\n", argv[0]);
+		return 0;
+	}
 
 	int server_port = atoi(argv[1]);
 	int master_socket, slave_socket;
@@ -27,6 +30,7 @@ int main(int argc, char const *argv[]){
 	if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
         perror("setsockopt error");
     }
+	bzero(&address, sizeof(address));
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
 	address.sin_port = htons(server_port);

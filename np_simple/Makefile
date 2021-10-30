@@ -24,13 +24,3 @@ clean:
 run: all
 	./$(EXEC) 3334
 
-prepare:
-	mkdir -p bin
-	mkdir -p obj
-	cp `which ls` bin/ls
-	cp `which cat` bin/cat
-	g++ commands/noop.cpp -o bin/noop
-	g++ commands/number.cpp -o bin/number
-	g++ commands/removetag0.cpp -o bin/removetag0
-	g++ commands/removetag.cpp -o bin/removetag
-
