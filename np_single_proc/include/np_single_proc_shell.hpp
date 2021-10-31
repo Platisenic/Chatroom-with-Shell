@@ -16,6 +16,13 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 	std::vector<std::vector<std::string> > parsed_line_input;
 	std::map<int, NumberPipeInfo>::iterator findit;
 	std::map<int, NumberPipeInfo>::iterator findit2;
+	std::vector<UserPipeInfo>::iterator findit3;
+	std::vector<UserPipeInfo>::iterator findit4;
+	std::deque<pid_t> pids;
+	int senderid = 0;
+	int recvid = 0;
+	int stdin_fd = STDIN_FILENO;
+	int stdout_fd = STDOUT_FILENO;
 	int stderr_fd = STDERR_FILENO;
 
     UserInfo &user = users[userid];
@@ -27,13 +34,12 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 	std::getline(std::cin, line_input);
 
 	if(std::cin.eof()) { fprintf(stdout, "\n"); user.conn = false;  return;}
+	if(line_input.back() == '\r') line_input.pop_back();
 	size_t countspace = 0;
 	for(auto li: line_input){
 		if(li == ' ') countspace++;
 	}
-	if (countspace == line_input.size() ||
-	   (countspace == line_input.size() - 1 && line_input.back() == '\r')) 
-	   { return; }
+	if (countspace == line_input.size()) { return; }
 
 	ParseLineInput(line_input, parsed_line_input);
 
@@ -76,6 +82,8 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 								 stderr_fd,
 								 "",
 								 findit);
+			close(findit->second.m_pipe_read);
+			close(findit->second.m_pipe_write);
 			for(auto it = findit->second.m_wait_pids.rbegin(); it != findit->second.m_wait_pids.rend(); it++){
 				findit2->second.m_wait_pids.push_front(*it);
 			}
@@ -98,6 +106,8 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 								stderr_fd,
 								"",
 								findit);
+			close(findit->second.m_pipe_read);
+			close(findit->second.m_pipe_write);
 			for(auto it = findit->second.m_wait_pids.rbegin(); it != findit->second.m_wait_pids.rend(); it++){
 				user.pids.push_front(*it);
 			}
@@ -135,6 +145,73 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 			// fprintf(stderr, "insert \n");
 			// std::cerr << user.pipeManager[user.totalline + num].m_pipe_read << std::endl;
 		}
+	}else if(finduserpipeCMD(parsed_line_input, senderid, recvid)){
+		if(senderid != 0 && recvid != 0){
+			// TODO
+		}else if(senderid != 0){ // receive message
+			if(!checkuserexist(users, senderid)){
+				fprintf(stdout, "*** Error: user #%d does not exist yet. ***\n", senderid);
+				user.totalline ++; // not sure TODO
+				return;
+			}
+			recvid = userid;
+			findit3 = checkuserpipeexists(user.userPipeManager, senderid, recvid);
+			if(findit3 == user.userPipeManager.end()){
+				fprintf(stdout, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", senderid, recvid);
+				user.totalline ++; //not sure TODO
+				return;
+			}
+			broadcastmsg(users, userpiperecvmsg(users, senderid, recvid, line_input));
+			pids = ExecCMD(user.pipeManager,
+					user.totalline,
+					parsed_line_input,
+					findit3->m_pipe_read,
+					STDOUT_FILENO,
+					STDERR_FILENO,
+					"",
+					findit);
+			for(auto its = findit3->m_wait_pids.begin(); its != findit3->m_wait_pids.end(); its++){
+				waitpid(*its, nullptr, 0);
+			}
+			for(pid_t pid: pids){
+				waitpid(pid, nullptr, 0);
+			}
+			close(findit3->m_pipe_read);
+			user.userPipeManager.erase(findit3);
+		}else{ // recvid != 0, send message
+			if(!checkuserexist(users, recvid)){
+				fprintf(stdout, "*** Error: user #%d does not exist yet. ***\n", recvid);
+				user.totalline ++; // not sure TODO
+				return;
+			}
+			senderid = userid;
+			findit3 = checkuserpipeexists(users[recvid].userPipeManager, senderid, recvid);
+			if(findit3 != users[recvid].userPipeManager.end()){
+				fprintf(stdout, "*** Error: the pipe #%d->#%d already exists. ***\n", senderid, recvid);
+				user.totalline ++; //not sure TODO
+				return;
+			}
+			broadcastmsg(users, userpipesendmsg(users, senderid, recvid, line_input));
+			while(pipe(numberpipefd) < 0) { usleep(1000); }
+			pids = ExecCMD(user.pipeManager,
+					user.totalline,
+					parsed_line_input,
+					STDIN_FILENO,
+					numberpipefd[1],
+					STDERR_FILENO,
+					"",
+					findit);
+
+			users[recvid].userPipeManager.push_back(UserPipeInfo(
+				numberpipefd[0],
+				numberpipefd[1],
+				senderid,
+				recvid,
+				pids
+			));
+			close(numberpipefd[1]);
+		}
+
 	}else{
 		std::string filename = getFileName(parsed_line_input.back());
 		if(filename != ""){
@@ -143,7 +220,7 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 		}
 		findit = user.pipeManager.find(user.totalline);
 		if(findit != user.pipeManager.end()){
-			ExecCMD(user.pipeManager,
+			pids = ExecCMD(user.pipeManager,
 					user.totalline,
 					parsed_line_input,
 					findit->second.m_pipe_read,
@@ -151,9 +228,17 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 					STDERR_FILENO,
 					filename,
 					findit);
+			close(findit->second.m_pipe_read);
+			close(findit->second.m_pipe_write);
+			for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
+				waitpid(*its, nullptr, 0);
+			}
+			for(pid_t pid: pids){
+				waitpid(pid, nullptr, 0);
+			}
 			user.pipeManager.erase(findit);
 		}else{
-		    ExecCMD(user.pipeManager,
+		    pids = ExecCMD(user.pipeManager,
 					user.totalline,
 					parsed_line_input,
 					STDIN_FILENO,
@@ -161,9 +246,12 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 					STDERR_FILENO,
 					filename,
 					findit);
+			for(pid_t pid: pids){
+				waitpid(pid, nullptr, 0);
+			}
 		}
 	}
-	user.totalline++;
 	
+	user.totalline++;
 	return;
 }

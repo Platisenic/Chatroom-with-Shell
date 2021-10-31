@@ -13,7 +13,6 @@
 #include "UserInfo.hpp"
 #include "utils.hpp"
 #include "np_single_proc_shell.hpp"
-#define MAX_USERS 40
 
 
 int main(int argc, char const *argv[]){
@@ -95,6 +94,9 @@ int main(int argc, char const *argv[]){
 					sendmessages(sock, "% ");
 				}else{ // leave
 					broadcastmsg(users, logoutmsg(users, userid));
+					for(auto p: users[userid].userPipeManager){
+						close(p.m_pipe_read);
+					}
 					close(sock);
 					FD_CLR(sock, &afds);
 				}

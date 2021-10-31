@@ -4,6 +4,7 @@
 #include <map>
 #include <deque>
 #include "numberpipeinfo.hpp"
+#include "userpipeinfo.hpp"
 class UserInfo{
 public:
     UserInfo() = default;
@@ -30,6 +31,7 @@ public:
         pipeManager.clear();
         pids.clear();
         totalline = 0;
+        userPipeManager.clear();
     }
 
     int userid;
@@ -42,4 +44,5 @@ public:
     std::map<int, NumberPipeInfo> pipeManager;
     std::deque<pid_t> pids;
 	int totalline;
+    std::vector<UserPipeInfo> userPipeManager;
 };

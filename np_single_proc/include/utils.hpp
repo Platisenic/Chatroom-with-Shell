@@ -9,8 +9,45 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include "numberpipeinfo.hpp"
-#include "lineinputinfo.hpp"
 #include "UserInfo.hpp"
+#define MAX_USERS 40
+std::vector<UserPipeInfo>::iterator checkuserpipeexists(std::vector<UserPipeInfo> &userPipeManager, int senderid, int recvid){
+	std::vector<UserPipeInfo>::iterator it;
+	for(it=userPipeManager.begin(); it!= userPipeManager.end(); it++){
+		if(it->send_userid == senderid && it->recv_userid == recvid){
+			return it;
+		}
+	}
+	return it;
+}
+
+bool finduserpipeCMD(std::vector<std::vector<std::string> > &ParseLineInput, int &senderid, int &recvid){
+	recvid = 0;
+	for(size_t i=0;i<ParseLineInput.size();i++){
+		// for(auto &s: ParseLineInput[i]){
+		for(auto iter=ParseLineInput[i].begin(); iter!=ParseLineInput[i].end(); iter++){
+			if(iter->front() == '>' && iter->size() != 1){
+				iter->erase(0, 1);
+				recvid = std::stoi(*iter);
+				ParseLineInput[i].erase(iter);
+				break;
+			}
+		}
+	}
+	senderid = 0;
+	for(size_t i=0;i<ParseLineInput.size();i++){
+		// for(auto &s: ParseLineInput[i]){
+		for(auto iter=ParseLineInput[i].begin(); iter!=ParseLineInput[i].end(); iter++){
+			if(iter->front() == '<' && iter->size() != 1){
+				iter->erase(0, 1);
+				senderid = std::stoi(*iter);
+				ParseLineInput[i].erase(iter);
+				break;
+			}
+		}
+	}
+	return ((senderid != 0) || (recvid != 0)) ;
+}
 
 std::string getFileName(std::vector<std::string> last){
 	if(last.size() < 2) return "";
@@ -19,6 +56,10 @@ std::string getFileName(std::vector<std::string> last){
 	}
 	return "";
 
+}
+
+bool checkuserexist(std::vector<UserInfo> &users, int userid){
+	return ((userid != 0) && (userid < MAX_USERS) && (users[userid].conn));
 }
 
 int findminUserId(std::vector<UserInfo> &users){
@@ -52,6 +93,18 @@ std::string loginmsg(std::vector<UserInfo> &users, int userid){
 std::string logoutmsg(std::vector<UserInfo> &users, int userid){
 	UserInfo user = users[userid];
 	return "*** User '" + user.name + "' left. ***\n";
+}
+
+std::string userpipesendmsg(std::vector<UserInfo> &users, int senderid, int recevid, std::string cmd){
+	UserInfo sender = users[senderid];
+	UserInfo recever = users[recevid];
+	return "*** " + sender.name + " (#" + std::to_string(senderid) + ") just piped '" + cmd + "' to " + recever.name + " (#" + std::to_string(recevid) + ") ***\n";
+}
+
+std::string userpiperecvmsg(std::vector<UserInfo> &users, int senderid, int recevid, std::string cmd){
+	UserInfo sender = users[senderid];
+	UserInfo recever = users[recevid];
+	return "*** " + recever.name + " (#" + std::to_string(recevid) + ") just received from " + sender.name + " (#" + std::to_string(senderid) + ") by '" + cmd + "' ***\n";
 }
 
 void sendmessages(int sockfd, std::string msg){
@@ -168,16 +221,10 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 	for(int i=0;i<processNum;i++){ // iterative child
 		if(processNum > 1){
 			if(i < pipeNum){
-				while(pipe(pipefds[i]) < 0){
-					// fprintf(stderr, "%s\n", strerror(errno));
-					usleep(1000);
-				}
+				while(pipe(pipefds[i]) < 0) { usleep(1000); }
 			}
 		}
-		while((pids[i] = fork()) < 0){
-			// fprintf(stderr, "%s\n", strerror(errno));
-			usleep(1000);
-		}
+		while((pids[i] = fork()) < 0) { usleep(1000); }
 		if(pids[i] == 0){ // child
 			if(i == 0){
 				if(stdin_fd != STDIN_FILENO){
@@ -263,24 +310,21 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 	} // end of for
 	
 	// parent close stdin pipe
-	if(stdin_fd != STDIN_FILENO){
-		close(findit->second.m_pipe_read);
-		close(findit->second.m_pipe_write);
-	}
+	// if(stdin_fd != STDIN_FILENO){
+	// 	close(findit->second.m_pipe_read);
+	// 	close(findit->second.m_pipe_write);
+	// }
 
-	if(stdout_fd == STDOUT_FILENO){
-		for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
-			// fprintf(stderr, "towait %d ", *its);
-			waitpid(*its, nullptr, 0);
-			// fprintf(stderr, "wpid: %d ", retpid);
-		}
+	// if(stdout_fd == STDOUT_FILENO){
+	// 	for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
+	// 		waitpid(*its, nullptr, 0);
+	// 	}
 	
-		// wait children
-		for(pid_t pid: pids){
-			waitpid(pid, nullptr, 0);
-			// fprintf(stderr, "pid: %d\n", retpid);
-		}
-	}
+	// 	// wait children
+	// 	for(pid_t pid: pids){
+	// 		waitpid(pid, nullptr, 0);
+	// 	}
+	// }
 
 	return pids;
 	

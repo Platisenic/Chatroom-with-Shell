@@ -10,7 +10,7 @@ public:
     int m_pipe_write;
     std::deque<pid_t> m_wait_pids;
 
-    NumberPipeInfo(int w, int r, std::deque<int> wp):
+    NumberPipeInfo(int w, int r, std::deque<pid_t> wp):
         m_pipe_read(w),
         m_pipe_write(r),
         m_wait_pids(wp)
