@@ -17,7 +17,11 @@
 
 
 int main(int argc, char const *argv[]){
-	if (argc != 2) fprintf(stderr, "Usage: %s [port]\n", argv[0]);
+	if (argc != 2) { fprintf(stderr, "Usage: %s [port]\n", argv[0]); return 0;}
+
+	if(signal(SIGCHLD,SIGCHLD_handler) == SIG_ERR){
+        fprintf(stderr, "Cannot handle SIGHLD");
+    }
 
 	int slave_socket;
 	int opt = 1;
@@ -53,8 +57,8 @@ int main(int argc, char const *argv[]){
 
 	while(true){
         memcpy(&rfds, &afds, sizeof(rfds));
-        if (select(nfds, &rfds, (fd_set *)0, (fd_set *)0, (struct timeval *)0) < 0){
-            perror("select error");
+        while (select(nfds, &rfds, (fd_set *)0, (fd_set *)0, (struct timeval *)0) < 0){
+            // perror("select error");
         }
 		if(FD_ISSET(master_socket, &rfds)){
 			slave_socket = accept(master_socket, (struct sockaddr *)&address,(socklen_t*)&addrlen);

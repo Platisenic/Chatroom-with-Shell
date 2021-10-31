@@ -2,7 +2,8 @@
 
 #include <string>
 #include <map>
-
+#include <deque>
+#include "numberpipeinfo.hpp"
 class UserInfo{
 public:
     UserInfo() = default;
@@ -14,6 +15,9 @@ public:
         port = 0;
         conn = c;
         env["PATH"] = "bin:.";
+        // pipeManager.clear();
+        // pids.clear();
+        totalline = 0;
     }
     void setinfo(int s, std::string n, std::string i, unsigned short p, bool c){
         sockfd = s;
@@ -23,6 +27,9 @@ public:
         conn = c;
         env.clear();
         env["PATH"] = "bin:.";
+        pipeManager.clear();
+        pids.clear();
+        totalline = 0;
     }
 
     int userid;
@@ -30,6 +37,9 @@ public:
     std::string name;
     std::string ip;
     unsigned short port;
-    std::map<std::string, std::string> env;
     bool conn;
+    std::map<std::string, std::string> env;
+    std::map<int, NumberPipeInfo> pipeManager;
+    std::deque<pid_t> pids;
+	int totalline;
 };

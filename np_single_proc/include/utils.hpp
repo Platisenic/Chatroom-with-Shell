@@ -5,11 +5,21 @@
 #include <map>
 #include <sstream>
 #include <unistd.h>
+#include <sys/socket.h>
 #include <fcntl.h>
 #include <sys/wait.h>
 #include "numberpipeinfo.hpp"
 #include "lineinputinfo.hpp"
 #include "UserInfo.hpp"
+
+std::string getFileName(std::vector<std::string> last){
+	if(last.size() < 2) return "";
+	if(last[last.size()-2] == ">"){
+		return last.back();
+	}
+	return "";
+
+}
 
 int findminUserId(std::vector<UserInfo> &users){
 	for(auto user: users){
@@ -35,13 +45,13 @@ std::string welcomemsg(){
 
 std::string loginmsg(std::vector<UserInfo> &users, int userid){
 	UserInfo user = users[userid];
-	return "*** User ’"+ user.name + "’ entered from " + user.ip + ":"+ std::to_string(user.port) + ". ***\n";
+	return "*** User '"+ user.name + "' entered from " + user.ip + ":"+ std::to_string(user.port) + ". ***\n";
 }
 
 
 std::string logoutmsg(std::vector<UserInfo> &users, int userid){
 	UserInfo user = users[userid];
-	return "*** User ’" + user.name + "’ left. ***\n";
+	return "*** User '" + user.name + "' left. ***\n";
 }
 
 void sendmessages(int sockfd, std::string msg){
@@ -84,8 +94,6 @@ void tell(std::vector<UserInfo> &users, int sendId, int recvId, std::string msg)
 	if(recvExist){
 		sendmessages(users[recvId].sockfd, "*** " + users[sendId].name + " told you ***: " + msg + "\n");
 	}else{
-		// sendmessages(users[sendId].sockfd, "*** Error: user #" + std::to_string(recvId) + " does not exist yet. ***\n");
-		// fprintf(stdout, ("*** Error: user #" + std::to_string(recvId) + " does not exist yet. ***\n").c_str());
 		fprintf(stdout, "*** Error: user #%d does not exist yet. ***\n", recvId);
 	}
 }
@@ -98,11 +106,9 @@ void changename(std::vector<UserInfo> &users, int userid, std::string newname){
 	UserInfo user = users[userid];
 	if(checkuniname(users, newname)){
 		users[userid].name = newname;
-		broadcastmsg(users, "*** User from " + user.ip + ":" + std::to_string(user.port) + " is named ’" + newname + "’. ***\n");
+		broadcastmsg(users, "*** User from " + user.ip + ":" + std::to_string(user.port) + " is named '" + newname + "'. ***\n");
 	}else{
-		// fprintf(stdout, ("*** User ’" + newname + "’ already exists. ***\n").c_str());
-		// sendmessages(user.sockfd, "*** User ’" + newname + "’ already exists. ***\n");
-		fprintf(stdout, "*** User ’%s’ already exists. ***\n", newname.c_str());
+		fprintf(stdout, "*** User '%s' already exists. ***\n", newname.c_str());
 	}
 }
 
@@ -140,6 +146,8 @@ void SIGCHLD_handler(int signo){
     int status;
     while ((waitpid(-1, &status, WNOHANG)) > 0) {}
 }
+
+
 std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 			   int totalline,
 			   std::vector<std::vector<std::string> > & parsed_line_input,
@@ -148,7 +156,6 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 			   int stderr_fd,
 			   std::string filename,
 			   std::map<int, NumberPipeInfo>::iterator findit){
-
 	int ret;
 	int filefd;
 	char** execvp_str;
@@ -260,6 +267,7 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 		close(findit->second.m_pipe_read);
 		close(findit->second.m_pipe_write);
 	}
+
 	if(stdout_fd == STDOUT_FILENO){
 		for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
 			// fprintf(stderr, "towait %d ", *its);
@@ -277,5 +285,3 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 	return pids;
 	
 }
-
-
