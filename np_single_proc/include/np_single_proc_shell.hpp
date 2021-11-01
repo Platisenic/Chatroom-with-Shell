@@ -9,7 +9,9 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
-
+// TODO
+//% cat <2 |1
+//% cat <2 > a.txt
 void single_proc_shell(std::vector<UserInfo> &users, int userid){
 	int numberpipefd[2];
 	std::string line_input;
@@ -24,7 +26,7 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 	int stdin_fd = STDIN_FILENO;
 	int stdout_fd = STDOUT_FILENO;
 	int stderr_fd = STDERR_FILENO;
-
+	std::string devnull = "/dev/null";
     UserInfo &user = users[userid];
 	clearenv();
 	for(auto env : user.env){
@@ -146,30 +148,61 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 			// std::cerr << user.pipeManager[user.totalline + num].m_pipe_read << std::endl;
 		}
 	}else if(finduserpipeCMD(parsed_line_input, senderid, recvid)){
-		if(senderid != 0 && recvid != 0){
-			// TODO
-		}else if(senderid != 0){ // receive message
+		int devnullfd = open(devnull.c_str(), O_RDWR);
+		stdin_fd = STDIN_FILENO;
+		stdout_fd = STDOUT_FILENO;
+		if(senderid != 0){ // receive message
+			findit3 = checkuserpipeexists(user.userPipeManager, senderid, userid);
 			if(!checkuserexist(users, senderid)){
-				fprintf(stdout, "*** Error: user #%d does not exist yet. ***\n", senderid);
-				user.totalline ++; // not sure TODO
-				return;
+				sendmessages(users[userid].sockfd, userpipeerrorusernotexist(senderid));
+				stdin_fd = devnullfd;
+			}else if(findit3 == user.userPipeManager.end()){
+				sendmessages(users[userid].sockfd, userpipeerrorpipenotexist(senderid, userid));
+				stdin_fd = devnullfd;
+			}else{
+				stdin_fd = findit3->m_pipe_read;
+				broadcastmsg(users, userpiperecvmsg(users, senderid, userid, line_input));
 			}
-			recvid = userid;
-			findit3 = checkuserpipeexists(user.userPipeManager, senderid, recvid);
-			if(findit3 == user.userPipeManager.end()){
-				fprintf(stdout, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", senderid, recvid);
-				user.totalline ++; //not sure TODO
-				return;
+		}
+		if(recvid != 0){ // send message
+			if(recvid < MAX_USERS) findit4 = checkuserpipeexists(users[recvid].userPipeManager, userid, recvid);
+			if(!checkuserexist(users, recvid)){
+				sendmessages(users[userid].sockfd, userpipeerrorusernotexist(recvid));
+				stdout_fd = devnullfd;
+			}else if(findit4 != users[recvid].userPipeManager.end()){
+				sendmessages(users[userid].sockfd, userpipeerrorpipeexist(userid, recvid));
+				stdout_fd = devnullfd;
+			}else{
+				while(pipe(numberpipefd) < 0) { usleep(1000); }
+				stdout_fd = numberpipefd[1];
+				broadcastmsg(users, userpipesendmsg(users, userid, recvid, line_input));
 			}
-			broadcastmsg(users, userpiperecvmsg(users, senderid, recvid, line_input));
-			pids = ExecCMD(user.pipeManager,
-					user.totalline,
-					parsed_line_input,
-					findit3->m_pipe_read,
-					STDOUT_FILENO,
-					STDERR_FILENO,
-					"",
-					findit);
+		}
+		pids = ExecCMD( user.pipeManager,
+						user.totalline,
+						parsed_line_input,
+						stdin_fd,
+						stdout_fd,
+						STDERR_FILENO,
+						"",
+						findit);
+		if((stdin_fd != devnullfd && stdin_fd != STDIN_FILENO) && (stdout_fd != devnullfd && stdout_fd != STDOUT_FILENO)){
+			close(findit3->m_pipe_read);
+			close(numberpipefd[1]);
+			for(auto it = findit3->m_wait_pids.rbegin(); it!=findit3->m_wait_pids.rend(); it++){
+				pids.push_front(*it);
+			}
+			user.userPipeManager.erase(findit3);
+			users[recvid].userPipeManager.push_back(UserPipeInfo(
+				numberpipefd[0],
+				numberpipefd[1],
+				userid,
+				recvid,
+				pids
+			));
+			// both receive and send
+		}else if(stdin_fd != devnullfd && stdin_fd != STDIN_FILENO){
+			// just receive
 			for(auto its = findit3->m_wait_pids.begin(); its != findit3->m_wait_pids.end(); its++){
 				waitpid(*its, nullptr, 0);
 			}
@@ -178,40 +211,24 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 			}
 			close(findit3->m_pipe_read);
 			user.userPipeManager.erase(findit3);
-		}else{ // recvid != 0, send message
-			if(!checkuserexist(users, recvid)){
-				fprintf(stdout, "*** Error: user #%d does not exist yet. ***\n", recvid);
-				user.totalline ++; // not sure TODO
-				return;
-			}
-			senderid = userid;
-			findit3 = checkuserpipeexists(users[recvid].userPipeManager, senderid, recvid);
-			if(findit3 != users[recvid].userPipeManager.end()){
-				fprintf(stdout, "*** Error: the pipe #%d->#%d already exists. ***\n", senderid, recvid);
-				user.totalline ++; //not sure TODO
-				return;
-			}
-			broadcastmsg(users, userpipesendmsg(users, senderid, recvid, line_input));
-			while(pipe(numberpipefd) < 0) { usleep(1000); }
-			pids = ExecCMD(user.pipeManager,
-					user.totalline,
-					parsed_line_input,
-					STDIN_FILENO,
-					numberpipefd[1],
-					STDERR_FILENO,
-					"",
-					findit);
-
+		}else if(stdout_fd != devnullfd && stdout_fd != STDOUT_FILENO){
+			// just send
 			users[recvid].userPipeManager.push_back(UserPipeInfo(
 				numberpipefd[0],
 				numberpipefd[1],
-				senderid,
+				userid,
 				recvid,
 				pids
 			));
 			close(numberpipefd[1]);
+		}else{
+			// neither receive or send
+			for(pid_t pid: pids){
+				waitpid(pid, nullptr, 0);
+			}
 		}
-
+		
+		close(devnullfd);
 	}else{
 		std::string filename = getFileName(parsed_line_input.back());
 		if(filename != ""){

@@ -59,7 +59,10 @@ std::string getFileName(std::vector<std::string> last){
 }
 
 bool checkuserexist(std::vector<UserInfo> &users, int userid){
-	return ((userid != 0) && (userid < MAX_USERS) && (users[userid].conn));
+	if(userid == 0) return false;
+	if(userid >= MAX_USERS) return false;
+	return users[userid].conn;
+	// return ((userid != 0) && (userid < MAX_USERS) && (users[userid].conn));
 }
 
 int findminUserId(std::vector<UserInfo> &users){
@@ -105,6 +108,18 @@ std::string userpiperecvmsg(std::vector<UserInfo> &users, int senderid, int rece
 	UserInfo sender = users[senderid];
 	UserInfo recever = users[recevid];
 	return "*** " + recever.name + " (#" + std::to_string(recevid) + ") just received from " + sender.name + " (#" + std::to_string(senderid) + ") by '" + cmd + "' ***\n";
+}
+
+std::string userpipeerrorusernotexist(int userid){
+	return "*** Error: user #" + std::to_string(userid) + " does not exist yet. ***\n";
+}
+
+std::string userpipeerrorpipenotexist(int senderid, int recvid){
+	return "*** Error: the pipe #" + std::to_string(senderid) + "->#" + std::to_string(recvid) + " does not exist yet. ***\n";
+}
+
+std::string userpipeerrorpipeexist(int senderid, int recvid){
+	return "*** Error: the pipe #" + std::to_string(senderid) + "->#" + std::to_string(recvid) + " already exists. ***\n";
 }
 
 void sendmessages(int sockfd, std::string msg){
