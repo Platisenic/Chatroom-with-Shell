@@ -56,9 +56,7 @@ int main(int argc, char const *argv[]){
 
 	while(true){
         memcpy(&rfds, &afds, sizeof(rfds));
-        while (select(nfds, &rfds, (fd_set *)0, (fd_set *)0, (struct timeval *)0) < 0){
-            // perror("select error");
-        }
+        while (select(nfds, &rfds, (fd_set *)0, (fd_set *)0, (struct timeval *)0) < 0) {}
 		if(FD_ISSET(master_socket, &rfds)){
 			slave_socket = accept(master_socket, (struct sockaddr *)&address,(socklen_t*)&addrlen);
 			if ( slave_socket < 0 ) { perror("accept error");}
@@ -94,8 +92,20 @@ int main(int argc, char const *argv[]){
 					sendmessages(sock, "% ");
 				}else{ // leave
 					broadcastmsg(users, logoutmsg(users, userid));
-					for(auto p: users[userid].userPipeManager){
-						close(p.m_pipe_read);
+					for(int id=1;id<MAX_USERS;id++){
+						if(users[id].conn){
+							for(auto it=users[id].userPipeManager.begin(); it!=users[id].userPipeManager.end(); it++){
+								if(it->recv_userid == userid || it->send_userid == userid){
+									close(it->m_pipe_read);
+									users[id].userPipeManager.erase(it);
+									it--;
+								}
+							}
+						}
+					}
+					for(auto it=users[userid].pipeManager.begin(); it!=users[userid].pipeManager.end();it++){
+						close(it->second.m_pipe_read);
+						close(it->second.m_pipe_write);
 					}
 					close(sock);
 					FD_CLR(sock, &afds);

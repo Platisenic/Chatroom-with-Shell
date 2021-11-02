@@ -9,9 +9,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
-// TODO
-//% cat <2 |1
-//% cat <2 > a.txt
+
 void single_proc_shell(std::vector<UserInfo> &users, int userid){
 	int numberpipefd[2];
 	std::string line_input;
