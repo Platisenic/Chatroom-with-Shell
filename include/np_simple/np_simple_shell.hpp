@@ -1,4 +1,14 @@
-#include "np_simple_shell.hpp"
+#pragma once
+#include "np_simple/utils.hpp"
+#include "np_simple/numberpipeinfo.hpp"
+
+#include <queue>
+#include <iostream>
+#include <map>
+
+#include <signal.h>
+#include <string.h>
+#include <unistd.h>
 
 void simple_shell(){
 	std::string line_input;
@@ -135,3 +145,4 @@ void simple_shell(){
 	
 	return;
 }
+

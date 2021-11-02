@@ -1,7 +1,7 @@
 #pragma once
-#include "utils.hpp"
-#include "numberpipeinfo.hpp"
-#include "UserInfo.hpp"
+#include "np_single_proc/utils.hpp"
+#include "np_single_proc/numberpipeinfo.hpp"
+#include "np_single_proc/UserInfo.hpp"
 #include <queue>
 #include <iostream>
 #include <map>

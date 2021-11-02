@@ -1,13 +1,14 @@
-
-#include "utils.hpp"
-
+#pragma once
+#include <string>
+#include <vector>
+#include <queue>
+#include <map>
+#include <unistd.h>
 #include <sstream>
-#include <iostream>
-
 #include <sys/wait.h>
-#include <sys/types.h>
-#include <string.h>
 #include <fcntl.h>
+#include "np_simple/numberpipeinfo.hpp"
+#include "np_simple/lineinputinfo.hpp"
 
 
 LineInputInfo ParseLineInput(std::string line_input, std::vector<std::vector<std::string> > &parsed_line_input){
@@ -60,7 +61,6 @@ LineInputInfo ParseLineInput(std::string line_input, std::vector<std::vector<std
 	}
 }
 
-
 void PrintENV(std::vector<std::string> &parsed_line_input){
 	char *pathvalue;
 	if(parsed_line_input.size() == 2){
@@ -71,13 +71,15 @@ void PrintENV(std::vector<std::string> &parsed_line_input){
 	}
 }
 
-
 void SetENV(std::vector<std::string> &parsed_line_input){
 	if(parsed_line_input.size() == 3){
 		setenv(parsed_line_input[1].c_str(), parsed_line_input[2].c_str(), 1);
 	}
 }
-
+void SIGCHLD_handler(int signo){
+    int status;
+    while ((waitpid(-1, &status, WNOHANG)) > 0) {}
+}
 
 std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 			   int totalline,
@@ -199,35 +201,14 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 		close(findit->second.m_pipe_read);
 		close(findit->second.m_pipe_write);
 	}
-	// int waittimes = 3000;
 	if(stdout_fd == STDOUT_FILENO){
 		for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
-			// fprintf(stderr, "towait %d ", *its);
 			waitpid(*its, nullptr, 0);
-			// fprintf(stderr, "wpid: %d ", retpid);
 		}
-	
-		// wait children
 		for(pid_t pid: pids){
 			waitpid(pid, nullptr, 0);
-			// fprintf(stderr, "pid: %d\n", retpid);
 		}
 	}
-	// else{
-	// 	while ((waitpid(pids.back(), nullptr, WNOHANG)) <= 0 && waittimes--) {}
-	// 	// for(pid_t pid: pids){
-	// 	// 	while ((waitpid(pid, nullptr, WNOHANG)) > 0) {}
-	// 	// 	// fprintf(stderr, "pid: %d\n", retpid);
-	// 	// }
-	// }
-	// usleep(5000);
-
 	return pids;
-	
-}
-
-void SIGCHLD_handler(int signo){
-    int status;
-    while ((waitpid(-1, &status, WNOHANG)) > 0) {}
 }
 

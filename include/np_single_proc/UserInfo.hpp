@@ -3,8 +3,8 @@
 #include <string>
 #include <map>
 #include <deque>
-#include "numberpipeinfo.hpp"
-#include "userpipeinfo.hpp"
+#include "np_single_proc/numberpipeinfo.hpp"
+#include "np_single_proc/userpipeinfo.hpp"
 class UserInfo{
 public:
     UserInfo() = default;

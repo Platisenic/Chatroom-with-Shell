@@ -18,5 +18,9 @@ public:
     int number;
     std::string fileName;
 
-    LineInputInfo(CASES, int, std::string);
+    LineInputInfo(CASES c, int n, std::string f):
+		cases(c),
+		number(n),
+		fileName(f)
+		{}
 };

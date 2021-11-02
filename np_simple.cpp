@@ -1,5 +1,5 @@
-#include "utils.hpp"
-#include "np_simple_shell.hpp"
+#include "np_simple/utils.hpp"
+#include "np_simple/np_simple_shell.hpp"
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>

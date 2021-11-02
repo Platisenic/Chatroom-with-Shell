@@ -10,9 +10,9 @@
 #include <algorithm>
 #include <string>
 #include <vector>
-#include "UserInfo.hpp"
-#include "utils.hpp"
-#include "np_single_proc_shell.hpp"
+#include "np_single_proc/UserInfo.hpp"
+#include "np_single_proc/utils.hpp"
+#include "np_single_proc/np_single_proc_shell.hpp"
 
 
 int main(int argc, char const *argv[]){

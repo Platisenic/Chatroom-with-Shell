@@ -8,8 +8,8 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <sys/wait.h>
-#include "numberpipeinfo.hpp"
-#include "UserInfo.hpp"
+#include "np_single_proc/numberpipeinfo.hpp"
+#include "np_single_proc/UserInfo.hpp"
 #define MAX_USERS 40
 
 
