@@ -11,6 +11,18 @@
 #include "numberpipeinfo.hpp"
 #include "UserInfo.hpp"
 #define MAX_USERS 40
+
+
+enum CASES{
+	STDIN_CASE = 0,
+	STDOUT_CASE,
+	FILEOUTPUT_CASE,
+	NUMBERPIPE_IN_CASES,
+	NUMBERPIPE_OUT_CASE,
+	NUMBERPIPE_OUT_ERR_CASE,
+	USERPIPE_CASE
+};
+
 std::vector<UserPipeInfo>::iterator checkuserpipeexists(std::vector<UserPipeInfo> &userPipeManager, int senderid, int recvid){
 	std::vector<UserPipeInfo>::iterator it;
 	for(it=userPipeManager.begin(); it!= userPipeManager.end(); it++){
@@ -21,41 +33,66 @@ std::vector<UserPipeInfo>::iterator checkuserpipeexists(std::vector<UserPipeInfo
 	return it;
 }
 
-bool finduserpipeCMD(std::vector<std::vector<std::string> > &ParseLineInput, int &senderid, int &recvid){
+bool findandparsefileoutredirect(std::vector<std::vector<std::string> > &parsed_line_input, std::string &filename){
+	filename = "";
+	std::vector<std::string> last = parsed_line_input.back();
+	if(last.size() < 2) return false;
+
+	if(last[last.size()-2] != ">") return false;
+	filename = last.back();
+	parsed_line_input.back().pop_back();
+	parsed_line_input.back().pop_back();
+	return true;
+
+}
+
+bool findandparsenumberpipeouterr(std::vector<std::vector<std::string> > &parsed_line_input, int &num){
+	num = 0;
+	std::string last = parsed_line_input.back().back();
+	if(last.front() != '!') return false;
+	last.erase(0, 1);
+	num = std::stoi(last);
+	parsed_line_input.back().pop_back();
+	return true;
+}
+
+bool findandparsenumberpipeout(std::vector<std::vector<std::string> > &parsed_line_input, int &num){
+	num = 0;
+	std::string last = parsed_line_input.back().back();
+	if(last.front() != '|') return false;
+	last.erase(0, 1);
+	num = std::stoi(last);
+	parsed_line_input.back().pop_back();
+	return true;
+}
+
+
+bool findandparseuserpipeCMD(std::vector<std::vector<std::string> > &parsed_line_input, int &senderid, int &recvid){
 	recvid = 0;
-	for(size_t i=0;i<ParseLineInput.size();i++){
+	for(size_t i=0;i<parsed_line_input.size();i++){
 		// for(auto &s: ParseLineInput[i]){
-		for(auto iter=ParseLineInput[i].begin(); iter!=ParseLineInput[i].end(); iter++){
+		for(auto iter=parsed_line_input[i].begin(); iter!=parsed_line_input[i].end(); iter++){
 			if(iter->front() == '>' && iter->size() != 1){
 				iter->erase(0, 1);
 				recvid = std::stoi(*iter);
-				ParseLineInput[i].erase(iter);
+				parsed_line_input[i].erase(iter);
 				break;
 			}
 		}
 	}
 	senderid = 0;
-	for(size_t i=0;i<ParseLineInput.size();i++){
-		// for(auto &s: ParseLineInput[i]){
-		for(auto iter=ParseLineInput[i].begin(); iter!=ParseLineInput[i].end(); iter++){
+	for(size_t i=0;i<parsed_line_input.size();i++){
+		// for(auto &s: parsed_line_input[i]){
+		for(auto iter=parsed_line_input[i].begin(); iter!=parsed_line_input[i].end(); iter++){
 			if(iter->front() == '<' && iter->size() != 1){
 				iter->erase(0, 1);
 				senderid = std::stoi(*iter);
-				ParseLineInput[i].erase(iter);
+				parsed_line_input[i].erase(iter);
 				break;
 			}
 		}
 	}
 	return ((senderid != 0) || (recvid != 0)) ;
-}
-
-std::string getFileName(std::vector<std::string> last){
-	if(last.size() < 2) return "";
-	if(last[last.size()-2] == ">"){
-		return last.back();
-	}
-	return "";
-
 }
 
 bool checkuserexist(std::vector<UserInfo> &users, int userid){
@@ -221,9 +258,7 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 			   std::vector<std::vector<std::string> > & parsed_line_input,
 			   int stdin_fd,
 			   int stdout_fd,
-			   int stderr_fd,
-			   std::string filename,
-			   std::map<int, NumberPipeInfo>::iterator findit){
+			   int stderr_fd){
 	int ret;
 	int filefd;
 	char** execvp_str;
@@ -259,13 +294,6 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 				if(stdout_fd != STDOUT_FILENO){
 					close(STDOUT_FILENO);
 					dup2(stdout_fd, STDOUT_FILENO);
-				}else if(filename != ""){
-					// fprintf(stderr, "Here\n");
-					filefd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-					// fprintf(stderr, "filefd:%d\n", filefd);
-					close(STDOUT_FILENO);
-					dup2(filefd, STDOUT_FILENO);
-					close(filefd);
 				}
 				if(stderr_fd != STDERR_FILENO){
 					close(STDERR_FILENO);
