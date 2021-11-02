@@ -94,23 +94,23 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 					broadcastmsg(users, userpiperecvmsg(users, senderid, userid, line_input));
 				}
 			}
-		}
-		if(recvid != 0){ // send message
-			if(recvid < MAX_USERS) findit4 = checkuserpipeexists(users[recvid].userPipeManager, userid, recvid);
-			if(!checkuserexist(users, recvid)){
-				sendmessages(users[userid].sockfd, userpipeerrorusernotexist(recvid));
-				stdout_fd = devnullfd;
-			}else if(findit4 != users[recvid].userPipeManager.end()){
-				sendmessages(users[userid].sockfd, userpipeerrorpipeexist(userid, recvid));
-				stdout_fd = devnullfd;
-			}else{
-				while(pipe(numberpipefd) < 0) { usleep(1000); }
-				stdout_fd = numberpipefd[1];
-				outstream_case = USERPIPE_CASE;
-				broadcastmsg(users, userpipesendmsg(users, userid, recvid, line_input));
+			if(recvid != 0){ // send message
+				if(recvid < MAX_USERS) findit4 = checkuserpipeexists(users[recvid].userPipeManager, userid, recvid);
+				if(!checkuserexist(users, recvid)){
+					sendmessages(users[userid].sockfd, userpipeerrorusernotexist(recvid));
+					stdout_fd = devnullfd;
+				}else if(findit4 != users[recvid].userPipeManager.end()){
+					sendmessages(users[userid].sockfd, userpipeerrorpipeexist(userid, recvid));
+					stdout_fd = devnullfd;
+				}else{
+					while(pipe(numberpipefd) < 0) { usleep(1000); }
+					stdout_fd = numberpipefd[1];
+					outstream_case = USERPIPE_CASE;
+					broadcastmsg(users, userpipesendmsg(users, userid, recvid, line_input));
+				}
 			}
 		}
-
+		
 		if(findandparsenumberpipeout(parsed_line_input, num)){
 			findit = user.pipeManager.find(user.totalline);  // find if there exist pipes go to current line
 			findit2 = user.pipeManager.find(user.totalline + num); // find if there exist pipes go to the same destination
@@ -133,9 +133,7 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 				stdout_fd = numberpipefd[1];
 				outstream_case = NUMBERPIPE_OUT_CASE;
 			}
-		}
-
-		if(findandparsenumberpipeouterr(parsed_line_input, num)){
+		}else if(findandparsenumberpipeouterr(parsed_line_input, num)){
 			findit = user.pipeManager.find(user.totalline);  // find if there exist pipes go to current line
 			findit2 = user.pipeManager.find(user.totalline + num); // find if there exist pipes go to the same destination
 			if(findit != user.pipeManager.end() && findit2 != user.pipeManager.end()){
@@ -167,6 +165,14 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 			stdout_fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 			outstream_case = FILEOUTPUT_CASE;
 		}
+
+		if(instream_case == STDIN_CASE){
+			findit = user.pipeManager.find(user.totalline);  // find if there exist pipes go to current line
+			if(findit != user.pipeManager.end()){
+				stdin_fd = findit->second.m_pipe_read;
+				instream_case = NUMBERPIPE_IN_CASES;
+			}
+		}
 		// end of check instream outstream conditions
 		////////////////////////////////////////////////////////////////////////////////
 		// execute command
@@ -179,15 +185,120 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
 		// end of execut command
 		////////////////////////////////////////////////////////////////////////////////
 		// dealing with close, wait
-		// TODO
-
-
-
-
 		if(outstream_case == FILEOUTPUT_CASE){
 			close(stdout_fd);
 		}
 		close(devnullfd);
+
+		if((instream_case == NUMBERPIPE_IN_CASES) && (outstream_case == NUMBERPIPE_OUT_CASE || outstream_case == NUMBERPIPE_OUT_ERR_CASE)){
+			close(findit->second.m_pipe_read);
+			close(findit->second.m_pipe_write);
+			if(findit2 != user.pipeManager.end()){	
+				for(auto it = findit->second.m_wait_pids.rbegin(); it != findit->second.m_wait_pids.rend(); it++){
+					findit2->second.m_wait_pids.push_front(*it);
+				}
+				for(auto it = pids.begin(); it != pids.end(); it++){
+					findit2->second.m_wait_pids.push_back(*it);
+				}
+			}else{
+				for(auto it = findit->second.m_wait_pids.rbegin(); it != findit->second.m_wait_pids.rend(); it++){
+					pids.push_front(*it);
+				}
+				user.pipeManager[user.totalline + num] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
+			}
+			user.pipeManager.erase(findit);
+		}else if((instream_case == STDIN_CASE) && (outstream_case == NUMBERPIPE_OUT_CASE || outstream_case == NUMBERPIPE_OUT_ERR_CASE)){
+			if (findit2 != user.pipeManager.end()){ // there exist pipes go to the same destination
+				for(auto it = pids.begin(); it != pids.end(); it++){
+					findit2->second.m_wait_pids.push_back(*it);
+				}
+			}else{
+				user.pipeManager[user.totalline + num] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
+			}
+		}else if((instream_case == USERPIPE_CASE) && (outstream_case == NUMBERPIPE_OUT_CASE || outstream_case == NUMBERPIPE_OUT_ERR_CASE)){
+			close(findit3->m_pipe_read);
+			if(findit2 != user.pipeManager.end()){ // there exist pipes go to the same destination
+				for(auto it = findit3->m_wait_pids.rbegin(); it != findit3->m_wait_pids.rend(); it++){
+					findit2->second.m_wait_pids.push_front(*it);
+				}
+				for(auto it = pids.begin(); it != pids.end(); it++){
+					findit2->second.m_wait_pids.push_back(*it);
+				}
+			}else{
+				for(auto it = findit3->m_wait_pids.rbegin(); it != findit3->m_wait_pids.rend(); it++){
+					pids.push_front(*it);
+				}
+				user.pipeManager[user.totalline + num] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
+			}
+			user.userPipeManager.erase(findit3);
+		}else if((instream_case == USERPIPE_CASE) && (outstream_case == USERPIPE_CASE)){
+			// both send and receive
+			close(findit3->m_pipe_read);
+			close(numberpipefd[1]);
+			for(auto it = findit3->m_wait_pids.rbegin(); it!=findit3->m_wait_pids.rend(); it++){
+				pids.push_front(*it);
+			}
+			user.userPipeManager.erase(findit3);
+			users[recvid].userPipeManager.push_back(UserPipeInfo(
+				numberpipefd[0],
+				numberpipefd[1],
+				userid,
+				recvid,
+				pids
+			));
+		}else if((instream_case == STDIN_CASE) && (outstream_case == USERPIPE_CASE)){ 
+			// just send
+			users[recvid].userPipeManager.push_back(UserPipeInfo(
+				numberpipefd[0],
+				numberpipefd[1],
+				userid,
+				recvid,
+				pids
+			));
+			close(numberpipefd[1]);
+		}else if((instream_case == NUMBERPIPE_IN_CASES) && (outstream_case == USERPIPE_CASE)){
+			close(findit->second.m_pipe_read);
+			close(findit->second.m_pipe_write);
+			for(auto it = findit->second.m_wait_pids.rbegin(); it != findit->second.m_wait_pids.rend(); it++){
+				pids.push_front(*it);
+			}
+			user.pipeManager.erase(findit);
+			users[recvid].userPipeManager.push_back(UserPipeInfo(
+				numberpipefd[0],
+				numberpipefd[1],
+				userid,
+				recvid,
+				pids
+			));
+			close(numberpipefd[1]);
+		}else if((instream_case == NUMBERPIPE_IN_CASES) && ((outstream_case == STDOUT_CASE) || (outstream_case == FILEOUTPUT_CASE))){
+			close(findit->second.m_pipe_read);
+			close(findit->second.m_pipe_write);
+			for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
+				waitpid(*its, nullptr, 0);
+			}
+			for(pid_t pid: pids){
+				waitpid(pid, nullptr, 0);
+			}
+			user.pipeManager.erase(findit);
+		}else if((instream_case == USERPIPE_CASE) && ((outstream_case == STDOUT_CASE) || (outstream_case == FILEOUTPUT_CASE))){
+			// just receive
+			close(findit3->m_pipe_read);
+			for(auto its = findit3->m_wait_pids.begin(); its != findit3->m_wait_pids.end(); its++){
+				waitpid(*its, nullptr, 0);
+			}
+			for(pid_t pid: pids){
+				waitpid(pid, nullptr, 0);
+			}
+			user.userPipeManager.erase(findit3);
+		}else if((instream_case == STDIN_CASE) && ((outstream_case == STDOUT_CASE) || (outstream_case == FILEOUTPUT_CASE))){
+			// just ordinary command
+			for(pid_t pid: pids){
+				waitpid(pid, nullptr, 0);
+			}
+		}else{
+			fprintf(stderr, "error cases\n");
+		}
 		////////////////////////////////////////////////////////////////////////////////
 	}
 	user.totalline++;

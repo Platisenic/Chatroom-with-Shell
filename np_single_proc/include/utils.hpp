@@ -260,7 +260,6 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 			   int stdout_fd,
 			   int stderr_fd){
 	int ret;
-	int filefd;
 	char** execvp_str;
 	std::vector<char*> ptr_list;
 	int processNum = parsed_line_input.size();

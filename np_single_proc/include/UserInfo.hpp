@@ -29,7 +29,7 @@ public:
         env.clear();
         env["PATH"] = "bin:.";
         pipeManager.clear();
-        pids.clear();
+        // pids.clear();
         totalline = 0;
         userPipeManager.clear();
     }
@@ -42,7 +42,7 @@ public:
     bool conn;
     std::map<std::string, std::string> env;
     std::map<int, NumberPipeInfo> pipeManager;
-    std::deque<pid_t> pids;
+    // std::deque<pid_t> pids;
 	int totalline;
     std::vector<UserPipeInfo> userPipeManager;
 };
