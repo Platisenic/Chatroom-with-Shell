@@ -8,14 +8,20 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include "np_simple/numberpipeinfo.hpp"
-#include "np_simple/lineinputinfo.hpp"
 
+enum CASES{
+	STDIN_CASE = 0,
+	STDOUT_CASE,
+	FILEOUTPUT_CASE,
+	NUMBERPIPE_IN_CASES,
+	NUMBERPIPE_OUT_CASE,
+	NUMBERPIPE_OUT_ERR_CASE
+};
 
-LineInputInfo ParseLineInput(std::string line_input, std::vector<std::vector<std::string> > &parsed_line_input){
+void ParseLineInput(std::string line_input, std::vector<std::vector<std::string> > & parsed_line_input){
 	std::stringstream ss;
 	std::string word;
 	std::vector<std::string> cmd;
-	int number;
 	ss << line_input;
 	while(ss >> word){
 		if(word == "|"){
@@ -26,39 +32,39 @@ LineInputInfo ParseLineInput(std::string line_input, std::vector<std::vector<std
 		}
 	}
 	parsed_line_input.push_back(cmd);
+}
 
-	ss.str(""); 
-	ss.clear();
+bool findandparsefileoutredirect(std::vector<std::vector<std::string> > &parsed_line_input, std::string &filename){
+	filename = "";
+	std::vector<std::string> last = parsed_line_input.back();
+	if(last.size() < 2) return false;
 
-	std::string first = cmd.front();
-	std::string last = cmd.back();
-	std::string last2 = (cmd.size() < 2 ) ?  "" : cmd.end()[-2];
+	if(last[last.size()-2] != ">") return false;
+	filename = last.back();
+	parsed_line_input.back().pop_back();
+	parsed_line_input.back().pop_back();
+	return true;
+}
 
-	if(first == "printenv"){
-		return LineInputInfo(CASES::PRINTENV, 0, "");
-	}else if(first == "setenv"){
-		return LineInputInfo(CASES::SETENV, 0, "");
-	}else if(first == "exit"){
-		return LineInputInfo(CASES::EXIT, 0, "");
-	}else if(last[0] == '|'){
-		last.erase(0, 1);
-		ss << last;
-		ss >> number;
-		parsed_line_input.back().pop_back();
-		return LineInputInfo(CASES::STDOUTNUMBERPIPE, number, "");
-	}else if(last[0] == '!'){
-		last.erase(0, 1);
-		ss << last;
-		ss >> number;
-		parsed_line_input.back().pop_back();
-		return LineInputInfo(CASES::STDOUTSTDERRNUMBERPIPE, number, "");
-	}else if(last2 == ">"){
-		parsed_line_input.back().pop_back();
-		parsed_line_input.back().pop_back();
-		return LineInputInfo(CASES::FILEOUTPUTREDIRECT, 0, last);
-	}else{
-		return LineInputInfo(CASES::ORDINARYPIPEORNOPIPE, 0, "");
-	}
+bool findandparsenumberpipeouterr(std::vector<std::vector<std::string> > &parsed_line_input, int &num){
+	num = 0;
+	std::string last = parsed_line_input.back().back();
+	if(last.front() != '!') return false;
+	last.erase(0, 1);
+	num = std::stoi(last);
+	parsed_line_input.back().pop_back();
+	return true;
+}
+
+
+bool findandparsenumberpipeout(std::vector<std::vector<std::string> > &parsed_line_input, int &num){
+	num = 0;
+	std::string last = parsed_line_input.back().back();
+	if(last.front() != '|') return false;
+	last.erase(0, 1);
+	num = std::stoi(last);
+	parsed_line_input.back().pop_back();
+	return true;
 }
 
 void PrintENV(std::vector<std::string> &parsed_line_input){
@@ -86,12 +92,8 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 			   std::vector<std::vector<std::string> > & parsed_line_input,
 			   int stdin_fd,
 			   int stdout_fd,
-			   int stderr_fd,
-			   std::string filename,
-			   std::map<int, NumberPipeInfo>::iterator findit){
-
+			   int stderr_fd){
 	int ret;
-	int filefd;
 	char** execvp_str;
 	std::vector<char*> ptr_list;
 	int processNum = parsed_line_input.size();
@@ -102,16 +104,10 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 	for(int i=0;i<processNum;i++){ // iterative child
 		if(processNum > 1){
 			if(i < pipeNum){
-				while(pipe(pipefds[i]) < 0){
-					// fprintf(stderr, "%s\n", strerror(errno));
-					usleep(1000);
-				}
+				while(pipe(pipefds[i]) < 0) { usleep(1000); }
 			}
 		}
-		while((pids[i] = fork()) < 0){
-			// fprintf(stderr, "%s\n", strerror(errno));
-			usleep(1000);
-		}
+		while((pids[i] = fork()) < 0) { usleep(1000); }
 		if(pids[i] == 0){ // child
 			if(i == 0){
 				if(stdin_fd != STDIN_FILENO){
@@ -131,13 +127,6 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 				if(stdout_fd != STDOUT_FILENO){
 					close(STDOUT_FILENO);
 					dup2(stdout_fd, STDOUT_FILENO);
-				}else if(filename != ""){
-					// fprintf(stderr, "Here\n");
-					filefd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-					// fprintf(stderr, "filefd:%d\n", filefd);
-					close(STDOUT_FILENO);
-					dup2(filefd, STDOUT_FILENO);
-					close(filefd);
 				}
 				if(stderr_fd != STDERR_FILENO){
 					close(STDERR_FILENO);
@@ -195,20 +184,5 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 
 		}
 	} // end of for
-	
-	// parent close stdin pipe
-	if(stdin_fd != STDIN_FILENO){
-		close(findit->second.m_pipe_read);
-		close(findit->second.m_pipe_write);
-	}
-	if(stdout_fd == STDOUT_FILENO){
-		for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
-			waitpid(*its, nullptr, 0);
-		}
-		for(pid_t pid: pids){
-			waitpid(pid, nullptr, 0);
-		}
-	}
 	return pids;
 }
-

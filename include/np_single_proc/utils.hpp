@@ -43,7 +43,6 @@ bool findandparsefileoutredirect(std::vector<std::vector<std::string> > &parsed_
 	parsed_line_input.back().pop_back();
 	parsed_line_input.back().pop_back();
 	return true;
-
 }
 
 bool findandparsenumberpipeouterr(std::vector<std::vector<std::string> > &parsed_line_input, int &num){
@@ -348,24 +347,5 @@ std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,
 
 		}
 	} // end of for
-	
-	// parent close stdin pipe
-	// if(stdin_fd != STDIN_FILENO){
-	// 	close(findit->second.m_pipe_read);
-	// 	close(findit->second.m_pipe_write);
-	// }
-
-	// if(stdout_fd == STDOUT_FILENO){
-	// 	for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
-	// 		waitpid(*its, nullptr, 0);
-	// 	}
-	
-	// 	// wait children
-	// 	for(pid_t pid: pids){
-	// 		waitpid(pid, nullptr, 0);
-	// 	}
-	// }
-
 	return pids;
-	
 }

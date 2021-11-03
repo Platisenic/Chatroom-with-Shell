@@ -21,6 +21,7 @@ int main(int argc, char const *argv[]){
 	int addrlen = sizeof(address);
 	pid_t pid;
 	int opt = 1;
+	int serverlogfd;
 	
 	if(signal(SIGCHLD,SIGCHLD_handler) == SIG_ERR) { perror("signal error"); }
 
@@ -45,20 +46,18 @@ int main(int argc, char const *argv[]){
 
 		if(pid == 0){ // child
 			close(master_socket);
-			close(STDIN_FILENO);
-			close(STDOUT_FILENO);
-			close(STDERR_FILENO);
+			serverlogfd = dup(STDOUT_FILENO);
 			dup2(slave_socket, STDIN_FILENO);
 			dup2(slave_socket, STDOUT_FILENO);
 			dup2(slave_socket, STDERR_FILENO);
 			close(slave_socket);
-			simple_shell();
+			simple_shell(serverlogfd);
+			close(serverlogfd);
 			_exit(EXIT_SUCCESS);
 
 		}else{ // parent
 			close(slave_socket);
 		}
-		
 	}
 
 	return 0;

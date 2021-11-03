@@ -10,7 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
-void simple_shell(){
+void simple_shell(int serverlogfd){
 	std::string line_input;
 	int numberpipefd[2];
 	std::vector<std::vector<std::string> > parsed_line_input;
@@ -18,129 +18,170 @@ void simple_shell(){
     std::map<int, NumberPipeInfo>::iterator findit;
 	std::map<int, NumberPipeInfo>::iterator findit2;
 	std::deque<pid_t> pids;
-	int totalline = 0;
+	int stdin_fd = STDIN_FILENO;
+	int stdout_fd = STDOUT_FILENO;
 	int stderr_fd = STDERR_FILENO;
+	int num = 0;
+	std::string filename = "";
+	int totalline = 0;
 	setenv("PATH", "bin:.", 1);
 
 	while(true){
 		// print prompt and get input from user
 		fprintf(stdout, "%% ");
 		std::getline(std::cin, line_input);
-
+		// dprintf(serverlogfd, "line_input: %s\n", line_input.c_str());
 		if(std::cin.eof()) { fprintf(stdout, "\n"); return; }
+		if(line_input.back() == '\r') line_input.pop_back();
 		size_t countspace = 0;
 		for(auto li: line_input){
 			if(li == ' ') countspace++;
 		}
-		if(countspace == line_input.size() || (countspace == line_input.size() - 1 && line_input.back() == '\r')) continue;
+		if (countspace == line_input.size()) { continue; }
+
 		parsed_line_input.clear();
-		LineInputInfo parse_status = ParseLineInput(line_input, parsed_line_input);
-		// accroding to parse_status, handle the cases
-		switch(parse_status.cases){
-			case CASES::PRINTENV:
-				PrintENV(parsed_line_input.front());
-				break;
-			case CASES::SETENV:
-				SetENV(parsed_line_input.front());
-				break;
-			case CASES::EXIT:
-				return;
-			case CASES::STDOUTNUMBERPIPE:
-			case CASES::STDOUTSTDERRNUMBERPIPE:
+		ParseLineInput(line_input, parsed_line_input);
+		std::string first = parsed_line_input.front().front();
+
+		if(first == "printenv"){
+			PrintENV(parsed_line_input.front());
+		}else if(first == "setenv"){
+			SetENV(parsed_line_input.front());
+		}else if(first == "exit"){
+			return;
+		}else{
+			enum::CASES instream_case = STDIN_CASE;
+			enum::CASES outstream_case = STDOUT_CASE;
+			stdin_fd = STDIN_FILENO;
+			stdout_fd = STDOUT_FILENO;
+			stderr_fd = STDERR_FILENO;
+
+			////////////////////////////////////////////////////////////////////////////////
+			// check instream outstream conditions
+			if(findandparsenumberpipeout(parsed_line_input, num)){
 				findit = pipeManager.find(totalline);  // find if there exist pipes go to current line
-				findit2 = pipeManager.find(totalline + parse_status.number); // find if there exist pipes go to the same destination
+				findit2 = pipeManager.find(totalline + num); // find if there exist pipes go to the same destination
 				if(findit != pipeManager.end() && findit2 != pipeManager.end()){
-					stderr_fd = (parse_status.cases == CASES::STDOUTSTDERRNUMBERPIPE) ? findit2->second.m_pipe_write: STDERR_FILENO;
-					pids = ExecCMD(pipeManager,
-							   	   totalline,
-							   	   parsed_line_input,
-							   	   findit->second.m_pipe_read,
-							   	   findit2->second.m_pipe_write,
-							   	   stderr_fd,
-							   	   "",
-								   findit);
+					stdin_fd = findit->second.m_pipe_read;
+					stdout_fd = findit2->second.m_pipe_write;
+					instream_case = NUMBERPIPE_IN_CASES;
+					outstream_case = NUMBERPIPE_OUT_CASE;
+				}else if (findit != pipeManager.end()){ // there exist pipes go to current line
+					while(pipe(numberpipefd) < 0) { usleep(1000); }
+					stdin_fd = findit->second.m_pipe_read;
+					stdout_fd = numberpipefd[1];
+					instream_case = NUMBERPIPE_IN_CASES;
+					outstream_case = NUMBERPIPE_OUT_CASE;
+				}else if (findit2 != pipeManager.end()){ // there exist pipes go to the same destination
+					stdout_fd = findit2->second.m_pipe_write;
+					outstream_case = NUMBERPIPE_OUT_CASE;
+				}else{ // none of above
+					while(pipe(numberpipefd) < 0) { usleep(1000);}
+					stdout_fd = numberpipefd[1];
+					outstream_case = NUMBERPIPE_OUT_CASE;
+				}
+			}else if(findandparsenumberpipeouterr(parsed_line_input, num)){
+				findit = pipeManager.find(totalline);  // find if there exist pipes go to current line
+				findit2 = pipeManager.find(totalline + num); // find if there exist pipes go to the same destination
+				if(findit != pipeManager.end() && findit2 != pipeManager.end()){
+					stdin_fd = findit->second.m_pipe_read;
+					stdout_fd = findit2->second.m_pipe_write;
+					stderr_fd = findit2->second.m_pipe_write;
+					instream_case = NUMBERPIPE_IN_CASES;
+					outstream_case = NUMBERPIPE_OUT_ERR_CASE;
+				}else if (findit != pipeManager.end()){ // there exist pipes go to current line
+					while(pipe(numberpipefd) < 0) { usleep(1000); }
+					stdin_fd = findit->second.m_pipe_read;
+					stdout_fd = numberpipefd[1];
+					stderr_fd = numberpipefd[1];
+					instream_case = NUMBERPIPE_IN_CASES;
+					outstream_case = NUMBERPIPE_OUT_ERR_CASE;
+				}else if (findit2 != pipeManager.end()){ // there exist pipes go to the same destination
+					stdout_fd = findit2->second.m_pipe_write;
+					stderr_fd = findit2->second.m_pipe_write;
+					outstream_case = NUMBERPIPE_OUT_ERR_CASE;
+				}else{ // none of above
+					while(pipe(numberpipefd) < 0) { usleep(1000);}
+					stdout_fd = numberpipefd[1];
+					stderr_fd = numberpipefd[1];
+					outstream_case = NUMBERPIPE_OUT_ERR_CASE;
+				}
+			}
+
+			if(findandparsefileoutredirect(parsed_line_input, filename)){
+				stdout_fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+				outstream_case = FILEOUTPUT_CASE;
+			}
+
+			if(instream_case == STDIN_CASE){
+				findit = pipeManager.find(totalline);  // find if there exist pipes go to current line
+				if(findit != pipeManager.end()){
+					stdin_fd = findit->second.m_pipe_read;
+					instream_case = NUMBERPIPE_IN_CASES;
+				}
+			}
+			// end of check instream outstream conditions
+			////////////////////////////////////////////////////////////////////////////////
+			// execute command
+			pids = ExecCMD (pipeManager,
+							totalline,
+							parsed_line_input,
+							stdin_fd,
+							stdout_fd,
+							stderr_fd);
+			// end of execut command
+			////////////////////////////////////////////////////////////////////////////////
+			// dealing with close, wait
+			if(outstream_case == FILEOUTPUT_CASE){
+				close(stdout_fd);
+			}
+			if((instream_case == NUMBERPIPE_IN_CASES) && (outstream_case == NUMBERPIPE_OUT_CASE || outstream_case == NUMBERPIPE_OUT_ERR_CASE)){
+				close(findit->second.m_pipe_read);
+				close(findit->second.m_pipe_write);
+				if(findit2 != pipeManager.end()){	
 					for(auto it = findit->second.m_wait_pids.rbegin(); it != findit->second.m_wait_pids.rend(); it++){
 						findit2->second.m_wait_pids.push_front(*it);
 					}
 					for(auto it = pids.begin(); it != pids.end(); it++){
 						findit2->second.m_wait_pids.push_back(*it);
 					}
-					pipeManager.erase(findit);
-
-				}else if (findit != pipeManager.end()){ // there exist pipes go to current line
-					while(pipe(numberpipefd) < 0){
-						// fprintf(stderr, "%s\n", strerror(errno));
-						usleep(1000);
-					}
-					stderr_fd = (parse_status.cases == CASES::STDOUTSTDERRNUMBERPIPE) ? numberpipefd[1]: STDERR_FILENO;
-					pids = ExecCMD(pipeManager,
-							   	   totalline,
-							   	   parsed_line_input,
-							   	   findit->second.m_pipe_read,
-							   	   numberpipefd[1],
-							   	   stderr_fd,
-							   	   "",
-								   findit);
+				}else{
 					for(auto it = findit->second.m_wait_pids.rbegin(); it != findit->second.m_wait_pids.rend(); it++){
 						pids.push_front(*it);
 					}
-					pipeManager.erase(findit);
-					pipeManager[totalline + parse_status.number] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
-
-				}else if (findit2 != pipeManager.end()){ // there exist pipes go to the same destination
-					stderr_fd = (parse_status.cases == CASES::STDOUTSTDERRNUMBERPIPE) ? findit2->second.m_pipe_write : STDERR_FILENO;
-					pids = ExecCMD(pipeManager,
-								   totalline,
-								   parsed_line_input,
-								   STDIN_FILENO,
-								   findit2->second.m_pipe_write,
-								   stderr_fd,
-								   "",
-								   findit);
+					pipeManager[totalline + num] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
+				}
+				pipeManager.erase(findit);
+			}else if((instream_case == STDIN_CASE) && (outstream_case == NUMBERPIPE_OUT_CASE || outstream_case == NUMBERPIPE_OUT_ERR_CASE)){
+				if (findit2 !=pipeManager.end()){ // there exist pipes go to the same destination
 					for(auto it = pids.begin(); it != pids.end(); it++){
 						findit2->second.m_wait_pids.push_back(*it);
 					}
-				}else{ // none of above
-					while(pipe(numberpipefd) < 0) { usleep(1000); }
-					stderr_fd = (parse_status.cases == CASES::STDOUTSTDERRNUMBERPIPE) ? numberpipefd[1] : STDERR_FILENO;
-					pids = ExecCMD(pipeManager,
-							   	   totalline,
-							   	   parsed_line_input,
-							   	   STDIN_FILENO,
-							   	   numberpipefd[1],
-							   	   stderr_fd,
-							   	   "",
-								   findit);
-					pipeManager[totalline + parse_status.number] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
-				}
-				break;
-			case CASES::ORDINARYPIPEORNOPIPE:
-			case CASES::FILEOUTPUTREDIRECT:
-				findit = pipeManager.find(totalline);
-				if(findit != pipeManager.end()){
-					ExecCMD(pipeManager,
-							  totalline,
-							  parsed_line_input,
-							  findit->second.m_pipe_read,
-							  STDOUT_FILENO,
-							  STDERR_FILENO,
-							  parse_status.fileName,
-							  findit);
-					pipeManager.erase(findit);
 				}else{
-					ExecCMD(pipeManager,
-							  totalline,
-							  parsed_line_input,
-							  STDIN_FILENO,
-							  STDOUT_FILENO,
-							  STDERR_FILENO,
-							  parse_status.fileName,
-							  findit);
+					pipeManager[totalline + num] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
 				}
-				break;
+			}else if((instream_case == NUMBERPIPE_IN_CASES) && ((outstream_case == STDOUT_CASE) || (outstream_case == FILEOUTPUT_CASE))){
+				close(findit->second.m_pipe_read);
+				close(findit->second.m_pipe_write);
+				for(auto its = findit->second.m_wait_pids.begin(); its != findit->second.m_wait_pids.end(); its++){
+					waitpid(*its, nullptr, 0);
+				}
+				for(pid_t pid: pids){
+					waitpid(pid, nullptr, 0);
+				}
+				pipeManager.erase(findit);
+			}else if((instream_case == STDIN_CASE) && ((outstream_case == STDOUT_CASE) || (outstream_case == FILEOUTPUT_CASE))){
+				// just ordinary command
+				for(pid_t pid: pids){
+					waitpid(pid, nullptr, 0);
+				}
+			}else{
+				fprintf(stderr, "error cases\n");
+			}
+			////////////////////////////////////////////////////////////////////////////////
 		}
-		// total line add by 1
-		++totalline;
+
+		totalline++;
 	}
 	
 	return;
