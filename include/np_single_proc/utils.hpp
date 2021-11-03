@@ -99,21 +99,19 @@ bool checkuserexist(std::vector<UserInfo> &users, int userid){
 	if(userid == 0) return false;
 	if(userid >= MAX_USERS) return false;
 	return users[userid].conn;
-	// return ((userid != 0) && (userid < MAX_USERS) && (users[userid].conn));
 }
 
 int findminUserId(std::vector<UserInfo> &users){
-	for(auto user: users){
-		if(user.userid != 0 && user.conn == false) return user.userid;
+	for(int i=1;i<MAX_USERS;i++){
+		if(users[i].conn == false) return i;
 	}
 	return 39;
 }
 
 int findUserIdBySock(std::vector<UserInfo> &users, int sock){
-	for(auto user: users){
-		if( user.userid != 0 &&
-		    user.sockfd == sock
-		  ) { return user.userid; }
+	for(int i=1;i<MAX_USERS;i++){
+		if( users[i].sockfd == sock
+		  ) { return i; }
 	}
 	return 39;
 }
@@ -164,18 +162,18 @@ void sendmessages(int sockfd, std::string msg){
 }
 
 void broadcastmsg(std::vector<UserInfo> &users, std::string msg){
-	for(auto user: users){
-		if(user.userid != 0 && user.conn == true){
-			sendmessages(user.sockfd, msg);
+	for(int i=1;i<MAX_USERS;i++){
+		if(users[i].conn == true){
+			sendmessages(users[i].sockfd, msg);
 		}
 	}
 }
 
 bool checkuniname(std::vector<UserInfo> &users, std::string newname){
-	for(auto user: users){
-		if( user.userid != 0 &&
-			user.conn == true &&
-			user.name == newname
+	// for(auto user: users){
+	for(int i=1;i<MAX_USERS;i++){
+		if( users[i].conn == true &&
+			users[i].name == newname
 		  ) { return false; }
 	}
 	return true;
@@ -183,10 +181,10 @@ bool checkuniname(std::vector<UserInfo> &users, std::string newname){
 
 void who(std::vector<UserInfo> &users, int userid){
 	fprintf(stdout, "<ID>\t<nickname>\t<IP:port>\t<indicate me>\n");
-	for(auto user: users){
-		if( user.userid != 0 && user.conn == true){
-			fprintf(stdout, "%d\t%s\t%s:%d", user.userid, user.name.c_str(), user.ip.c_str(), user.port);
-			if(user.userid == userid){
+	for(int i=1;i<MAX_USERS;i++){
+		if( users[i].conn == true){
+			fprintf(stdout, "%d\t%s\t%s:%d", i, users[i].name.c_str(), users[i].ip.c_str(), users[i].port);
+			if(i == userid){
 				fprintf(stdout, "\t<-me");
 			}
 			fprintf(stdout, "\n");
@@ -195,7 +193,7 @@ void who(std::vector<UserInfo> &users, int userid){
 }
 
 void tell(std::vector<UserInfo> &users, int sendId, int recvId, std::string msg){
-	bool recvExist = users[recvId].conn;
+	bool recvExist = checkuserexist(users, recvId);
 	if(recvExist){
 		sendmessages(users[recvId].sockfd, "*** " + users[sendId].name + " told you ***: " + msg + "\n");
 	}else{

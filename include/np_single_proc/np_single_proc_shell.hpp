@@ -10,7 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
-void single_proc_shell(std::vector<UserInfo> &users, int userid){
+void single_proc_shell(std::vector<UserInfo> &users, int userid, int serverlogfd){
 	int numberpipefd[2];
 	std::string line_input;
 	std::vector<std::vector<std::string> > parsed_line_input;
@@ -34,7 +34,7 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid){
     }
 
 	std::getline(std::cin, line_input);
-
+	// dprintf(serverlogfd, "line_input: %s\n", line_input.c_str());
 	if(std::cin.eof()) { fprintf(stdout, "\n"); user.conn = false;  return;}
 	if(line_input.back() == '\r') line_input.pop_back();
 	size_t countspace = 0;

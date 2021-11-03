@@ -43,7 +43,7 @@ int main(int argc, char const *argv[]){
 	if ( listen(master_socket, MAX_USERS) < 0 ) { perror("listen error"); }
 
 	fd_set	rfds, afds;
-	int nfds = master_socket + 1;
+	int nfds = master_socket;
     FD_ZERO(&afds);
     FD_SET(master_socket, &afds);
 
@@ -56,12 +56,12 @@ int main(int argc, char const *argv[]){
 
 	while(true){
         memcpy(&rfds, &afds, sizeof(rfds));
-        while (select(nfds, &rfds, (fd_set *)0, (fd_set *)0, (struct timeval *)0) < 0) {}
+        while (select(nfds + 1, &rfds, (fd_set *)0, (fd_set *)0, (struct timeval *)0) < 0) {}
 		if(FD_ISSET(master_socket, &rfds)){
 			slave_socket = accept(master_socket, (struct sockaddr *)&address,(socklen_t*)&addrlen);
 			if ( slave_socket < 0 ) { perror("accept error");}
 			FD_SET(slave_socket, &afds);
-			nfds = std::max(nfds, slave_socket + 1);
+			nfds = std::max(nfds, slave_socket);
 			int minid = findminUserId(users);
 			users[minid].setinfo(
 				slave_socket,
@@ -73,7 +73,7 @@ int main(int argc, char const *argv[]){
 			broadcastmsg(users, loginmsg(users, minid));
 			sendmessages(slave_socket, "% ");
 		}
-		for(int sock=0; sock<nfds; ++sock){
+		for(int sock=0; sock<=nfds; ++sock){
 			if(sock != master_socket && FD_ISSET(sock, &rfds)){
 				int userid = findUserIdBySock(users, sock);
 				storestdfd[0] = dup(STDIN_FILENO);
@@ -82,26 +82,33 @@ int main(int argc, char const *argv[]){
 				dup2(sock, STDIN_FILENO);
 				dup2(sock, STDOUT_FILENO);
 				dup2(sock, STDERR_FILENO);
-				single_proc_shell(users, userid);
+				single_proc_shell(users, userid, storestdfd[1]);
 				fflush(stdout);
 				fflush(stderr);
 				dup2(storestdfd[0], STDIN_FILENO);
 				dup2(storestdfd[1], STDOUT_FILENO);
 				dup2(storestdfd[2], STDERR_FILENO);
+				close(storestdfd[0]);
+				close(storestdfd[1]);
+				close(storestdfd[2]);
 				if(users[userid].conn){ // still connected
 					sendmessages(sock, "% ");
 				}else{ // leave
 					broadcastmsg(users, logoutmsg(users, userid));
 					for(int id=1;id<MAX_USERS;id++){
 						if(users[id].conn){
-							for(auto it=users[id].userPipeManager.begin(); it!=users[id].userPipeManager.end(); it++){
-								if(it->recv_userid == userid || it->send_userid == userid){
+							for(auto it=users[id].userPipeManager.begin(); it!=users[id].userPipeManager.end();){
+								if(it->send_userid == userid){
 									close(it->m_pipe_read);
 									users[id].userPipeManager.erase(it);
-									it--;
+								}else{
+									it++;
 								}
 							}
 						}
+					}
+					for(auto p: users[userid].userPipeManager){
+						close(p.m_pipe_read);
 					}
 					for(auto it=users[userid].pipeManager.begin(); it!=users[userid].pipeManager.end();it++){
 						close(it->second.m_pipe_read);
