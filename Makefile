@@ -14,8 +14,7 @@ EXEC3HEADER   = $(wildcard include/$(EXEC3)/*.hpp)
 
 .PHONY: prepare clean all run1 run2 run3
 
-all: $(EXEC1) $(EXEC2)
-# all: $(EXEC1) $(EXEC2) $(EXEC3)
+all: $(EXEC1) $(EXEC2) $(EXEC3)
 
 $(EXEC1): $(EXEC1).cpp $(EXEC1HEADER)
 	$(CC) $(CFLAGS) -o $@ $<
@@ -23,8 +22,8 @@ $(EXEC1): $(EXEC1).cpp $(EXEC1HEADER)
 $(EXEC2): $(EXEC2).cpp $(EXEC2HEADER)
 	$(CC) $(CFLAGS) -o $@ $<
 
-# $(EXEC3): $(EXEC3).cpp $(EXEC3HEADER)
-# 	$(CC) $(CFLAGS) -o $@ $<
+$(EXEC3): $(EXEC3).cpp $(EXEC3HEADER)
+	$(CC) $(CFLAGS) -o $@ $<
 
 clean:
 	rm -rf test*.txt
@@ -36,8 +35,8 @@ run1: $(EXEC1)
 run2: $(EXEC2)
 	./$(EXEC2) 3335
 
-# run3: $(EXEC3)
-# 	./$(EXEC3) 3336
+run3: $(EXEC3)
+	./$(EXEC3) 3336
 
 prepare:
 	mkdir -p bin

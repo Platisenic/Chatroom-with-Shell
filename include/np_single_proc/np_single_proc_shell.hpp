@@ -56,17 +56,21 @@ void single_proc_shell(std::vector<UserInfo> &users, int userid, int serverlogfd
 	}else if(first == "who"){
 		who(users, userid);
 	}else if(first == "tell"){
-        size_t found = line_input.find(parsed_line_input.front()[1]);
-        found += parsed_line_input.front()[1].size() + 1;
-        std::string tellmsg = line_input.substr(found);
-        tell(users, userid, std::stoi(parsed_line_input.front()[1]), tellmsg);
+		if(parsed_line_input.front().size() >= 2){
+			size_t found = line_input.find(parsed_line_input.front()[1]);
+			found += parsed_line_input.front()[1].size() + 1;
+			std::string tellmsg = line_input.substr(found);
+			tell(users, userid, std::stoi(parsed_line_input.front()[1]), tellmsg);
+		}
 	}else if(first == "yell"){
         size_t found = line_input.find(parsed_line_input.front()[0]);
         found += parsed_line_input.front()[0].size() + 1;
         std::string yellmsg = line_input.substr(found);
         yell(users, userid, yellmsg);
 	}else if(first == "name"){
-        changename(users, userid, parsed_line_input.front()[1]);
+		if(parsed_line_input.front().size() == 2){
+        	changename(users, userid, parsed_line_input.front()[1]);
+		}
 	}else{
 		enum::CASES instream_case = STDIN_CASE;
 		enum::CASES outstream_case = STDOUT_CASE;
