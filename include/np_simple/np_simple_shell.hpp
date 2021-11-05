@@ -10,7 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
-void simple_shell(int serverlogfd){
+void shell(int serverlogfd){
 	std::string line_input;
 	int numberpipefd[2];
 	std::vector<std::vector<std::string> > parsed_line_input;

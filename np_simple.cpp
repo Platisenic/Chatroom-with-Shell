@@ -51,7 +51,7 @@ int main(int argc, char const *argv[]){
 			dup2(slave_socket, STDOUT_FILENO);
 			dup2(slave_socket, STDERR_FILENO);
 			close(slave_socket);
-			simple_shell(serverlogfd);
+			shell(serverlogfd);
 			close(serverlogfd);
 			_exit(EXIT_SUCCESS);
 

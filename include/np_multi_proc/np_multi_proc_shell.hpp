@@ -10,7 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
-void simple_shell(ShareMemory* shmaddr, int userid, int serverlogfd){
+void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 	std::string line_input;
 	int numberpipefd[2];
 	std::vector<std::vector<std::string> > parsed_line_input;

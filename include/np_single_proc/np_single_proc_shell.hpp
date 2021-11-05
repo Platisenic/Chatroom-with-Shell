@@ -10,7 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
-void single_proc_shell(std::vector<UserInfo> &users, int userid, int serverlogfd){
+void shell(std::vector<UserInfo> &users, int userid, int serverlogfd){
 	int numberpipefd[2];
 	std::string line_input;
 	std::vector<std::vector<std::string> > parsed_line_input;

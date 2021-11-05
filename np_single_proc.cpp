@@ -82,7 +82,7 @@ int main(int argc, char const *argv[]){
 				dup2(sock, STDIN_FILENO);
 				dup2(sock, STDOUT_FILENO);
 				dup2(sock, STDERR_FILENO);
-				single_proc_shell(users, userid, storestdfd[1]);
+				shell(users, userid, storestdfd[1]);
 				fflush(stdout);
 				fflush(stderr);
 				dup2(storestdfd[0], STDIN_FILENO);

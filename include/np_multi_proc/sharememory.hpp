@@ -1,15 +1,17 @@
 #pragma once
 
 #include "sys/shm.h"
-#define MAX_USERS 40
-#define MAX_MSG_NUM 100 //TODO
-#define MAX_MSG_SIZE 1500
+#define MAX_USERS 36
+#define MAX_MSG_NUM 32
+#define MAX_MSG_SIZE 1600
+#define MAX_NAME_SIZE 32
+#define MAX_IP_SIZE 32
 
 struct UserInfo{
     pid_t pid;
     int userid;
-    char name[50];
-    char ip[50];
+    char name[MAX_NAME_SIZE];
+    char ip[MAX_IP_SIZE];
     unsigned short port;
     bool conn;
     char msgbuffer[MAX_MSG_NUM][MAX_MSG_SIZE];

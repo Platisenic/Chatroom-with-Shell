@@ -73,6 +73,7 @@ int main(int argc, char const *argv[]){
 			dup2(slave_socket, STDERR_FILENO);
 			close(slave_socket);
             int minid = findminUserId(shmaddr);
+			fprintf(stdout, "size: %ld\n", sizeof(inet_ntoa(address.sin_addr)));
 			userSetInfo(
 				shmaddr,
 				getpid(),
@@ -85,7 +86,7 @@ int main(int argc, char const *argv[]){
 				0);
 			fprintf(stdout, "%s", welcomemsg().c_str());
 			broadcastmsg(shmaddr, loginmsg(shmaddr, minid));
-			simple_shell(shmaddr, minid, serverlogfd);
+			shell(shmaddr, minid, serverlogfd);
 			shmdt(shmaddr);
 			close(serverlogfd);
 			_exit(EXIT_SUCCESS);

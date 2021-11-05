@@ -11,7 +11,6 @@
 #include "np_multi_proc/numberpipeinfo.hpp"
 #include "np_multi_proc/sharememory.hpp"
 #include "np_multi_proc/semaphore.hpp"
-#define MAX_USERS 40
 
 int shmid;
 int semid;
@@ -44,7 +43,8 @@ std::string loginmsg(ShareMemory *shmaddr, int userid){
 
 void sendmessages(ShareMemory *shmaddr, int recvid, std::string msg){
 	lock(semid);
-	strcpy(shmaddr->users[recvid].msgbuffer[shmaddr->users[recvid].writeEnd++], msg.c_str());
+	strcpy(shmaddr->users[recvid].msgbuffer[(shmaddr->users[recvid].writeEnd)% MAX_MSG_NUM], msg.c_str());
+	shmaddr->users[recvid].writeEnd++;
 	unlock(semid);
 	kill(shmaddr->users[recvid].pid, SIGUSR1);
 }
@@ -54,7 +54,8 @@ void broadcastmsg(ShareMemory *shmaddr, std::string msg){
 	std::vector<pid_t> pids;
 	for(int i=1;i<MAX_USERS;i++){
 		if(shmaddr->users[i].conn == true){
-			strcpy(shmaddr->users[i].msgbuffer[shmaddr->users[i].writeEnd++], msg.c_str());
+			strcpy(shmaddr->users[i].msgbuffer[(shmaddr->users[i].writeEnd)% MAX_MSG_NUM], msg.c_str());
+			shmaddr->users[i].writeEnd++;
 			pids.push_back(shmaddr->users[i].pid);
 		}
 	}
@@ -257,8 +258,9 @@ void SIGUSR1_handler(int signo){ // printout message
 		}
 	}
 	while(shmaddr->users[userid].readEnd < shmaddr->users[userid].writeEnd){
-		fprintf(stdout, "%s", shmaddr->users[userid].msgbuffer[shmaddr->users[userid].readEnd++]);
+		fprintf(stdout, "%s", shmaddr->users[userid].msgbuffer[(shmaddr->users[userid].readEnd) % MAX_MSG_NUM]);
 		fflush(stdout);
+		shmaddr->users[userid].readEnd++;
 	}
 	unlock(semid);
 }
