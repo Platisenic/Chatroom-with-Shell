@@ -22,8 +22,54 @@ enum CASES{
 	FILEOUTPUT_CASE,
 	NUMBERPIPE_IN_CASES,
 	NUMBERPIPE_OUT_CASE,
-	NUMBERPIPE_OUT_ERR_CASE
+	NUMBERPIPE_OUT_ERR_CASE,
+	USERPIPE_CASE
 };
+
+std::string checkuserpipeexists(ShareMemory *shmaddr, int senderid, int recvid){
+	lock(semid);
+	if(!(shmaddr->userPipeManager[senderid][recvid].exist)){
+		unlock(semid);
+		return "";
+	}
+	std::string ret(shmaddr->userPipeManager[senderid][recvid].FIFOname);
+	unlock(semid);
+	return ret;
+}
+
+std::string userpipesendmsg(ShareMemory *shmaddr, int senderid, int recevid, std::string cmd){
+	lock(semid);
+	std::string sendername = shmaddr->users[senderid].name;
+	std::string senderids = std::to_string(senderid);
+	std::string recevname = shmaddr->users[recevid].name;
+	std::string recevids = std::to_string(recevid);
+	std::string wholemsg = "*** " + sendername + " (#" + senderids + ") just piped '" + cmd + "' to " + recevname + " (#" + recevids + ") ***\n";
+	unlock(semid);
+	return wholemsg;
+}
+
+std::string userpiperecvmsg(ShareMemory *shmaddr, int senderid, int recevid, std::string cmd){
+	lock(semid);
+	std::string sendername = shmaddr->users[senderid].name;
+	std::string senderids = std::to_string(senderid);
+	std::string recevname = shmaddr->users[recevid].name;
+	std::string recevids = std::to_string(recevid);
+	std::string wholemsg =  "*** " + recevname + " (#" + recevids + ") just received from " + sendername + " (#" + senderids + ") by '" + cmd + "' ***\n";
+	unlock(semid);
+	return wholemsg;
+}
+
+std::string userpipeerrorusernotexist(int userid){
+	return "*** Error: user #" + std::to_string(userid) + " does not exist yet. ***\n";
+}
+
+std::string userpipeerrorpipenotexist(int senderid, int recvid){
+	return "*** Error: the pipe #" + std::to_string(senderid) + "->#" + std::to_string(recvid) + " does not exist yet. ***\n";
+}
+
+std::string userpipeerrorpipeexist(int senderid, int recvid){
+	return "*** Error: the pipe #" + std::to_string(senderid) + "->#" + std::to_string(recvid) + " already exists. ***\n";
+}
 
 std::string welcomemsg(){
 	return "****************************************\n"
@@ -169,7 +215,7 @@ int findminUserId(ShareMemory *shmaddr){
 		}
 	}
 	unlock(semid);
-	return 39;
+	return 0;
 }
 
 void ParseLineInput(std::string line_input, std::vector<std::vector<std::string> > & parsed_line_input){
@@ -186,6 +232,36 @@ void ParseLineInput(std::string line_input, std::vector<std::vector<std::string>
 		}
 	}
 	parsed_line_input.push_back(cmd);
+}
+
+
+
+bool findandparseuserpipeCMD(std::vector<std::vector<std::string> > &parsed_line_input, int &senderid, int &recvid){
+	recvid = 0;
+	for(size_t i=0;i<parsed_line_input.size();i++){
+		// for(auto &s: ParseLineInput[i]){
+		for(auto iter=parsed_line_input[i].begin(); iter!=parsed_line_input[i].end(); iter++){
+			if(iter->front() == '>' && iter->size() != 1){
+				iter->erase(0, 1);
+				recvid = std::stoi(*iter);
+				parsed_line_input[i].erase(iter);
+				break;
+			}
+		}
+	}
+	senderid = 0;
+	for(size_t i=0;i<parsed_line_input.size();i++){
+		// for(auto &s: parsed_line_input[i]){
+		for(auto iter=parsed_line_input[i].begin(); iter!=parsed_line_input[i].end(); iter++){
+			if(iter->front() == '<' && iter->size() != 1){
+				iter->erase(0, 1);
+				senderid = std::stoi(*iter);
+				parsed_line_input[i].erase(iter);
+				break;
+			}
+		}
+	}
+	return ((senderid != 0) || (recvid != 0)) ;
 }
 
 bool findandparsefileoutredirect(std::vector<std::vector<std::string> > &parsed_line_input, std::string &filename){

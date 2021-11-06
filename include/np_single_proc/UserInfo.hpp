@@ -16,8 +16,6 @@ public:
         port = 0;
         conn = c;
         env["PATH"] = "bin:.";
-        // pipeManager.clear();
-        // pids.clear();
         totalline = 0;
     }
     void setinfo(int s, std::string n, std::string i, unsigned short p, bool c){
@@ -29,7 +27,6 @@ public:
         env.clear();
         env["PATH"] = "bin:.";
         pipeManager.clear();
-        // pids.clear();
         totalline = 0;
         userPipeManager.clear();
     }
@@ -42,7 +39,6 @@ public:
     bool conn;
     std::map<std::string, std::string> env;
     std::map<int, NumberPipeInfo> pipeManager;
-    // std::deque<pid_t> pids;
 	int totalline;
     std::vector<UserPipeInfo> userPipeManager;
 };

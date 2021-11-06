@@ -34,7 +34,7 @@ int main(int argc, char const *argv[]){
 	// create share memory and semaphore //
     shmid = shmget(IPC_PRIVATE, sizeof(ShareMemory), IPC_CREAT | 0600);
     if(shmid < 0) { perror("get shm error"); }
-    semid = semget(IPC_PRIVATE, 1, IPC_CREAT | 0666);
+    semid = semget(IPC_PRIVATE, 1, IPC_CREAT | 0600);
     if(semid < 0) { perror("semget error"); }
 
 	// attach local memory to shared memory and initialize // 
@@ -43,6 +43,11 @@ int main(int argc, char const *argv[]){
         shmaddr->users[i].userid = i;
         shmaddr->users[i].conn = false;
     }
+	for(int i=0;i<MAX_USERS;i++){
+		for(int j=0;j<MAX_USERS;j++){
+			shmaddr->userPipeManager[i][j].exist = false;
+		}
+	}
 
 	// create socket, bind, listen
 	master_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -73,7 +78,6 @@ int main(int argc, char const *argv[]){
 			dup2(slave_socket, STDERR_FILENO);
 			close(slave_socket);
             int minid = findminUserId(shmaddr);
-			fprintf(stdout, "size: %ld\n", sizeof(inet_ntoa(address.sin_addr)));
 			userSetInfo(
 				shmaddr,
 				getpid(),

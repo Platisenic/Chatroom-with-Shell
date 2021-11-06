@@ -7,8 +7,12 @@
 #include <map>
 
 #include <signal.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
+
+#define FIFOFOLDER "user_pipe/"
+#define FOLDERLENGTH 10
 
 void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 	std::string line_input;
@@ -17,12 +21,20 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 	std::map<int, NumberPipeInfo> pipeManager;
     std::map<int, NumberPipeInfo>::iterator findit;
 	std::map<int, NumberPipeInfo>::iterator findit2;
+	std::string findFIFO3;
+	std::string findFIFO4;
 	std::deque<pid_t> pids;
+	int senderid = 0;
+	int recvid = 0;
 	int stdin_fd = STDIN_FILENO;
 	int stdout_fd = STDOUT_FILENO;
 	int stderr_fd = STDERR_FILENO;
 	int num = 0;
+	int fid;
+	int sid;
+	int rid;
 	std::string filename = "";
+	std::string devnull = "/dev/null";
 	int totalline = 0;
 
 	setenv("PATH", "bin:.", 1);
@@ -77,9 +89,52 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 			stdin_fd = STDIN_FILENO;
 			stdout_fd = STDOUT_FILENO;
 			stderr_fd = STDERR_FILENO;
+			int devnullfd = open(devnull.c_str(), O_RDWR);
 
 			////////////////////////////////////////////////////////////////////////////////
 			// check instream outstream conditions
+			if(findandparseuserpipeCMD(parsed_line_input, senderid, recvid)){
+				if(senderid != 0){ // receive message
+					if(!checkuserexist(shmaddr, senderid)){
+						sendmessages(shmaddr, userid, userpipeerrorusernotexist(senderid));
+						stdin_fd = devnullfd;
+					}else{
+						findFIFO3 = checkuserpipeexists(shmaddr, senderid, userid);
+						if(findFIFO3 == ""){
+							sendmessages(shmaddr, userid, userpipeerrorpipenotexist(senderid, userid));
+							stdin_fd = devnullfd;
+						}else{
+							stdin_fd = open(findFIFO3.c_str(), O_RDONLY | O_NONBLOCK); //TODO
+							instream_case = USERPIPE_CASE;
+							broadcastmsg(shmaddr, userpiperecvmsg(shmaddr, senderid, userid, line_input));
+						}
+					}
+				}
+				if(recvid != 0){ // send message
+					if(!checkuserexist(shmaddr, recvid)){
+						sendmessages(shmaddr, userid, userpipeerrorusernotexist(recvid));
+						stdout_fd = devnullfd;
+					}else{
+						findFIFO4 = checkuserpipeexists(shmaddr, userid, recvid);
+						if(findFIFO4 != ""){
+							sendmessages(shmaddr, userid, userpipeerrorpipeexist(userid, recvid));
+							stdout_fd = devnullfd;
+						}else{
+							std::string sender = std::to_string(userid);
+							std::string receiver = std::to_string(recvid);
+							std::string wholefile = FIFOFOLDER + sender + "-" + receiver;
+							if(mkfifo(wholefile.c_str(), 0666) < 0){
+								perror("fifo create error");
+							}
+							stdout_fd = open(wholefile.c_str(), O_RDWR); //TODO
+							outstream_case = USERPIPE_CASE;
+							findFIFO4 = wholefile; // TODO
+							broadcastmsg(shmaddr, userpipesendmsg(shmaddr, userid, recvid, line_input));
+						}
+					}
+				}
+			}
+
 			if(findandparsenumberpipeout(parsed_line_input, num)){
 				findit = pipeManager.find(totalline);  // find if there exist pipes go to current line
 				findit2 = pipeManager.find(totalline + num); // find if there exist pipes go to the same destination
@@ -131,7 +186,7 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 			}
 
 			if(findandparsefileoutredirect(parsed_line_input, filename)){
-				stdout_fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+				stdout_fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
 				outstream_case = FILEOUTPUT_CASE;
 			}
 
@@ -157,6 +212,8 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 			if(outstream_case == FILEOUTPUT_CASE){
 				close(stdout_fd);
 			}
+			close(devnullfd);
+
 			if((instream_case == NUMBERPIPE_IN_CASES) && (outstream_case == NUMBERPIPE_OUT_CASE || outstream_case == NUMBERPIPE_OUT_ERR_CASE)){
 				close(findit->second.m_pipe_read);
 				close(findit->second.m_pipe_write);
@@ -182,6 +239,86 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 				}else{
 					pipeManager[totalline + num] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
 				}
+			}else if((instream_case == USERPIPE_CASE) && (outstream_case == NUMBERPIPE_OUT_CASE || outstream_case == NUMBERPIPE_OUT_ERR_CASE)){
+				close(stdin_fd);
+				if(findit2 != pipeManager.end()){ // there exist pipes go to the same destination
+					// for(auto it = findit3->m_wait_pids.rbegin(); it != findit3->m_wait_pids.rend(); it++){
+					// 	findit2->second.m_wait_pids.push_front(*it);
+					// }
+					// TODO
+					for(auto it = pids.begin(); it != pids.end(); it++){
+						findit2->second.m_wait_pids.push_back(*it);
+					}
+				}else{
+					// for(auto it = findit3->m_wait_pids.rbegin(); it != findit3->m_wait_pids.rend(); it++){
+					// 	pids.push_front(*it);
+					// }
+					// TODO
+					pipeManager[totalline + num] = NumberPipeInfo(numberpipefd[0], numberpipefd[1], pids);
+				}
+				lock(semid);
+				fid = findFIFO3.find("-");
+				sid = std::stoi(findFIFO3.substr(FOLDERLENGTH, fid));
+				rid = std::stoi(findFIFO3.substr(fid+1));
+				shmaddr->userPipeManager[sid][rid].exist = false;
+				// unlink(findFIFO3.c_str()); // TODO
+				unlock(semid);
+			}else if((instream_case == USERPIPE_CASE) && (outstream_case == USERPIPE_CASE)){
+				// both send and receive
+				
+				// for(auto it = findit3->m_wait_pids.rbegin(); it!=findit3->m_wait_pids.rend(); it++){
+				// 	pids.push_front(*it);
+				// }
+				// TODO
+				lock(semid);
+				fid = findFIFO3.find("-");
+				sid = std::stoi(findFIFO3.substr(FOLDERLENGTH, fid));
+				rid = std::stoi(findFIFO3.substr(fid+1));
+				shmaddr->userPipeManager[sid][rid].exist = false;
+				// unlink(findFIFO3.c_str()); //TODO
+
+				fid = findFIFO4.find("-");
+				sid = std::stoi(findFIFO4.substr(FOLDERLENGTH, fid));
+				rid = std::stoi(findFIFO4.substr(fid+1));
+				strcpy(shmaddr->userPipeManager[sid][rid].FIFOname, findFIFO4.c_str());
+				shmaddr->userPipeManager[sid][rid].exist = true;
+
+				unlock(semid);
+
+				close(stdin_fd);
+				close(stdout_fd);
+			}else if((instream_case == STDIN_CASE) && (outstream_case == USERPIPE_CASE)){ 
+				// just send
+				lock(semid);
+				fid = findFIFO4.find("-");
+				sid = std::stoi(findFIFO4.substr(FOLDERLENGTH, fid));
+				rid = std::stoi(findFIFO4.substr(fid+1));
+				strcpy(shmaddr->userPipeManager[sid][rid].FIFOname, findFIFO4.c_str());
+				shmaddr->userPipeManager[sid][rid].exist = true;
+				// dprintf(serverlogfd, "sid: %d\n", sid);
+				// dprintf(serverlogfd, "rid: %d\n", rid);
+				// dprintf(serverlogfd, "fifoname: %s\n", shmaddr->userPipeManager[sid][rid].FIFOname);
+				// dprintf(serverlogfd, "exist: %d\n", shmaddr->userPipeManager[sid][rid].exist);
+				unlock(semid);
+				// sleep(5);
+				close(stdout_fd); // TODO
+			}else if((instream_case == NUMBERPIPE_IN_CASES) && (outstream_case == USERPIPE_CASE)){
+				close(findit->second.m_pipe_read);
+				close(findit->second.m_pipe_write);
+				// for(auto it = findit->second.m_wait_pids.rbegin(); it != findit->second.m_wait_pids.rend(); it++){
+				// 	pids.push_front(*it);
+				// }
+				// TODO
+				pipeManager.erase(findit);
+				lock(semid);
+				int found = findFIFO4.find("-");
+				int sid = std::stoi(findFIFO4.substr(FOLDERLENGTH, found));
+				int rid = std::stoi(findFIFO4.substr(found+1));
+				strcpy(shmaddr->userPipeManager[sid][rid].FIFOname, findFIFO4.c_str());
+				shmaddr->userPipeManager[sid][rid].exist = true;
+				unlock(semid);
+
+				close(stdout_fd);
 			}else if((instream_case == NUMBERPIPE_IN_CASES) && ((outstream_case == STDOUT_CASE) || (outstream_case == FILEOUTPUT_CASE))){
 				close(findit->second.m_pipe_read);
 				close(findit->second.m_pipe_write);
@@ -192,6 +329,24 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 					waitpid(pid, nullptr, 0);
 				}
 				pipeManager.erase(findit);
+			}else if((instream_case == USERPIPE_CASE) && ((outstream_case == STDOUT_CASE) || (outstream_case == FILEOUTPUT_CASE))){
+				// just receive
+				// close(stdin_fd);
+				// for(auto its = findit3->m_wait_pids.begin(); its != findit3->m_wait_pids.end(); its++){
+				// 	waitpid(*its, nullptr, 0);
+				// }
+				// TODO
+				for(pid_t pid: pids){
+					waitpid(pid, nullptr, 0);
+				}
+				lock(semid);
+				int found = findFIFO3.find("-");
+				int sid = std::stoi(findFIFO3.substr(FOLDERLENGTH, found));
+				int rid = std::stoi(findFIFO3.substr(found+1));
+				shmaddr->userPipeManager[sid][rid].exist = false;
+				// unlink(findFIFO3.c_str()); //TODO
+				unlock(semid);
+				// user.userPipeManager.erase(findit3);
 			}else if((instream_case == STDIN_CASE) && ((outstream_case == STDOUT_CASE) || (outstream_case == FILEOUTPUT_CASE))){
 				// just ordinary command
 				for(pid_t pid: pids){
