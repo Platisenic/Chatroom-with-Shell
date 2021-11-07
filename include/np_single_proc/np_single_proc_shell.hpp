@@ -35,7 +35,7 @@ void shell(std::vector<UserInfo> &users, int userid, int serverlogfd){
 
 	std::getline(std::cin, line_input);
 	// dprintf(serverlogfd, "line_input: %s\n", line_input.c_str());
-	if(std::cin.eof()) { fprintf(stdout, "\n"); user.conn = false;  return;}
+	// if(std::cin.eof()) { fprintf(stdout, "\n"); user.conn = false;  return;}
 	if(line_input.back() == '\r') line_input.pop_back();
 	size_t countspace = 0;
 	for(auto li: line_input){

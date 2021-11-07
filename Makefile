@@ -28,6 +28,7 @@ $(EXEC3): $(EXEC3).cpp $(EXEC3HEADER)
 clean:
 	rm -rf test*.txt
 	rm -rf $(EXEC1) $(EXEC2) $(EXEC3)
+	rm -f user_pipe/*
 
 run1: $(EXEC1)
 	./$(EXEC1) 3334

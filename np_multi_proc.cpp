@@ -31,6 +31,12 @@ int main(int argc, char const *argv[]){
 	if(signal(SIGINT, SIGINT_handler) == SIG_ERR) { perror("signal error"); }
 	if(signal(SIGUSR1, SIGUSR1_handler) == SIG_ERR) { perror("signal error"); }
 
+	struct sigaction act;
+	memset(&act, 0, sizeof(act));
+	act.sa_sigaction =  SIGUSR2_handler;
+	act.sa_flags = SA_SIGINFO | SA_RESTART;
+	if(sigaction(SIGUSR2, &act, NULL) < 0) { perror("signal error"); }
+
 	// create share memory and semaphore //
     shmid = shmget(IPC_PRIVATE, sizeof(ShareMemory), IPC_CREAT | 0600);
     if(shmid < 0) { perror("get shm error"); }
@@ -91,6 +97,17 @@ int main(int argc, char const *argv[]){
 			fprintf(stdout, "%s", welcomemsg().c_str());
 			broadcastmsg(shmaddr, loginmsg(shmaddr, minid));
 			shell(shmaddr, minid, serverlogfd);
+			broadcastmsg(shmaddr, logoutmsg(shmaddr, minid));
+			lock(semid);
+			for(int i=0;i<MAX_USERS;i++){
+				for(int j=0;j<MAX_USERS;j++){
+					if(shmaddr->userPipeManager[i][j].exist){
+						shmaddr->userPipeManager[i][j].exist = false;
+						close(shmaddr->userPipeManager[i][j].recvfd);
+					}
+				}
+			}
+			unlock(semid);
 			shmdt(shmaddr);
 			close(serverlogfd);
 			_exit(EXIT_SUCCESS);

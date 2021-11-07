@@ -87,6 +87,14 @@ std::string loginmsg(ShareMemory *shmaddr, int userid){
 	return msg;
 }
 
+std::string logoutmsg(ShareMemory *shmaddr, int userid){
+	lock(semid);
+	std::string name(shmaddr->users[userid].name);
+	std::string msg = "*** User '" + name + "' left. ***\n";
+	unlock(semid);
+	return msg;
+}
+
 void sendmessages(ShareMemory *shmaddr, int recvid, std::string msg){
 	lock(semid);
 	strcpy(shmaddr->users[recvid].msgbuffer[(shmaddr->users[recvid].writeEnd)% MAX_MSG_NUM], msg.c_str());
@@ -297,6 +305,18 @@ bool findandparsenumberpipeout(std::vector<std::vector<std::string> > &parsed_li
 	return true;
 }
 
+int findUserIDbyPid(ShareMemory *shmaddr, pid_t pid){
+	lock(semid);
+	for(int userid=1; userid<MAX_USERS; userid++){
+		if(shmaddr->users[userid].conn && shmaddr->users[userid].pid == pid){
+			unlock(semid);
+			return userid;
+		}
+	}
+	unlock(semid);
+	return 0;
+}
+
 void PrintENV(std::vector<std::string> &parsed_line_input){
 	char *pathvalue;
 	if(parsed_line_input.size() == 2){
@@ -325,19 +345,26 @@ void SIGINT_handler(int signo){
 }
 
 void SIGUSR1_handler(int signo){ // printout message
-	lock(semid);
 	pid_t pid = getpid();
-	int userid;
-	for(userid=1; userid<MAX_USERS; userid++){
-		if(shmaddr->users[userid].conn && shmaddr->users[userid].pid == pid){
-			break;
-		}
-	}
+	int userid = findUserIDbyPid(shmaddr, pid);
+	lock(semid);
 	while(shmaddr->users[userid].readEnd < shmaddr->users[userid].writeEnd){
 		fprintf(stdout, "%s", shmaddr->users[userid].msgbuffer[(shmaddr->users[userid].readEnd) % MAX_MSG_NUM]);
 		fflush(stdout);
 		shmaddr->users[userid].readEnd++;
 	}
+	unlock(semid);
+}
+
+// https://stackoverflow.com/questions/19140892/strange-sigaction-and-getline-interaction
+void SIGUSR2_handler(int signo, siginfo_t *info, void *context){
+	pid_t sendpid = info->si_pid;
+	pid_t recvpid = getpid();
+	int senderid = findUserIDbyPid(shmaddr, sendpid);
+	int recvid = findUserIDbyPid(shmaddr, recvpid);
+	lock(semid);
+	shmaddr->userPipeManager[senderid][recvid].recvfd = open(
+		shmaddr->userPipeManager[senderid][recvid].FIFOname, O_RDONLY );
 	unlock(semid);
 }
 

@@ -10,6 +10,7 @@
 
 struct UserPipeInfo{
     char FIFOname[MAX_FIFO_NAME];
+    int recvfd;
     bool exist;
 };
 
