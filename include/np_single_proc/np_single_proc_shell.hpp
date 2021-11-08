@@ -30,7 +30,7 @@ void shell(std::vector<UserInfo> &users, int userid, int serverlogfd){
     UserInfo &user = users[userid];
 
 	for(auto env : user.env){
-        setenv(env.first.c_str(), env.second.c_str(), 1);
+        while(setenv(env.first.c_str(), env.second.c_str(), 1) < 0){}
     }
 
 	std::getline(std::cin, line_input);

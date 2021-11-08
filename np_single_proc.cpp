@@ -46,7 +46,6 @@ int main(int argc, char const *argv[]){
 	int nfds = master_socket;
     FD_ZERO(&afds);
     FD_SET(master_socket, &afds);
-
 	std::vector<UserInfo> users;
 	for(int i=0; i<MAX_USERS; i++){
 		users.push_back(UserInfo(i, false));

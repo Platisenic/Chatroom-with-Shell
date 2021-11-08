@@ -24,7 +24,8 @@ void shell(int serverlogfd){
 	int num = 0;
 	std::string filename = "";
 	int totalline = 0;
-	setenv("PATH", "bin:.", 1);
+
+	while(setenv("PATH", "bin:.", 1) < 0) {}
 
 	while(true){
 		// print prompt and get input from user

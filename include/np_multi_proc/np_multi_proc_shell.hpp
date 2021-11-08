@@ -34,7 +34,7 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 	std::string devnull = "/dev/null";
 	int totalline = 0;
 
-	setenv("PATH", "bin:.", 1);
+	while(setenv("PATH", "bin:.", 1) < 0) {}
 
 	while(true){
 		// print prompt and get input from user
