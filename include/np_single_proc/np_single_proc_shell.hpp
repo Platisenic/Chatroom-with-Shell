@@ -28,7 +28,7 @@ void shell(std::vector<UserInfo> &users, int userid, int serverlogfd){
 	std::string filename = "";
 	std::string devnull = "/dev/null";
     UserInfo &user = users[userid];
-	clearenv();
+
 	for(auto env : user.env){
         setenv(env.first.c_str(), env.second.c_str(), 1);
     }
@@ -83,32 +83,36 @@ void shell(std::vector<UserInfo> &users, int userid, int serverlogfd){
 		// check instream outstream conditions
 		if(findandparseuserpipeCMD(parsed_line_input, senderid, recvid)){
 			if(senderid != 0){ // receive message
-				findit3 = checkuserpipeexists(user.userPipeManager, senderid, userid);
 				if(!checkuserexist(users, senderid)){
 					sendmessages(users[userid].sockfd, userpipeerrorusernotexist(senderid));
 					stdin_fd = devnullfd;
-				}else if(findit3 == user.userPipeManager.end()){
-					sendmessages(users[userid].sockfd, userpipeerrorpipenotexist(senderid, userid));
-					stdin_fd = devnullfd;
 				}else{
-					stdin_fd = findit3->m_pipe_read;
-					instream_case = USERPIPE_CASE;
-					broadcastmsg(users, userpiperecvmsg(users, senderid, userid, line_input));
+					findit3 = checkuserpipeexists(user.userPipeManager, senderid, userid);
+					if(findit3 == user.userPipeManager.end()){
+						sendmessages(users[userid].sockfd, userpipeerrorpipenotexist(senderid, userid));
+						stdin_fd = devnullfd;
+					}else{
+						stdin_fd = findit3->m_pipe_read;
+						instream_case = USERPIPE_CASE;
+						broadcastmsg(users, userpiperecvmsg(users, senderid, userid, line_input));
+					}
 				}
 			}
-			if(recvid != 0){ // send message
-				if(recvid < MAX_USERS) findit4 = checkuserpipeexists(users[recvid].userPipeManager, userid, recvid);
+			if(recvid != 0){
 				if(!checkuserexist(users, recvid)){
 					sendmessages(users[userid].sockfd, userpipeerrorusernotexist(recvid));
 					stdout_fd = devnullfd;
-				}else if(findit4 != users[recvid].userPipeManager.end()){
-					sendmessages(users[userid].sockfd, userpipeerrorpipeexist(userid, recvid));
-					stdout_fd = devnullfd;
 				}else{
-					while(pipe(numberpipefd) < 0) { usleep(1000); }
-					stdout_fd = numberpipefd[1];
-					outstream_case = USERPIPE_CASE;
-					broadcastmsg(users, userpipesendmsg(users, userid, recvid, line_input));
+					findit4 = checkuserpipeexists(users[recvid].userPipeManager, userid, recvid);
+					if(findit4 != users[recvid].userPipeManager.end()){
+						sendmessages(users[userid].sockfd, userpipeerrorpipeexist(userid, recvid));
+						stdout_fd = devnullfd;
+					}else{
+						while(pipe(numberpipefd) < 0) { usleep(1000); }
+						stdout_fd = numberpipefd[1];
+						outstream_case = USERPIPE_CASE;
+						broadcastmsg(users, userpipesendmsg(users, userid, recvid, line_input));
+					}
 				}
 			}
 		}
