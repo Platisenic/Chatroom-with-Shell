@@ -31,9 +31,9 @@ int main(int argc, char const *argv[]){
 	if(signal(SIGUSR1, SIGUSR1_handler) == SIG_ERR) { perror("signal error"); }
 
 	// create share memory and semaphore //
-    shmid = shmget(IPC_PRIVATE, sizeof(ShareMemory), IPC_CREAT | 0600);
+    shmid = shmget(IPC_PRIVATE, sizeof(ShareMemory), IPC_CREAT | 0666);
     if(shmid < 0) { perror("get shm error"); }
-    semid = semget(IPC_PRIVATE, 1, IPC_CREAT | 0600);
+    semid = semget(IPC_PRIVATE, 1, IPC_CREAT | 0666);
     if(semid < 0) { perror("semget error"); }
 
 	// attach local memory to shared memory and initialize // 
