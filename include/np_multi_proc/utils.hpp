@@ -15,6 +15,7 @@
 int shmid;
 int semid;
 ShareMemory* shmaddr;
+int serverlogfd;
 
 enum CASES{
 	STDIN_CASE = 0,
@@ -95,27 +96,28 @@ std::string logoutmsg(ShareMemory *shmaddr, int userid){
 	return msg;
 }
 
-void sendmessages(ShareMemory *shmaddr, int recvid, std::string msg){
+void sendmessages(ShareMemory *shmaddr, int recvid, std::string msg, int sendid, int piperecvid, enum::MSGTYPES msgtype){
 	lock(semid);
 	strcpy(shmaddr->users[recvid].msgbuffer[(shmaddr->users[recvid].writeEnd)% MAX_MSG_NUM], msg.c_str());
+	shmaddr->users[recvid].msgsenderid[(shmaddr->users[recvid].writeEnd)% MAX_MSG_NUM] = sendid;
+	shmaddr->users[recvid].msgtypes[(shmaddr->users[recvid].writeEnd)% MAX_MSG_NUM] = msgtype;
+	shmaddr->users[recvid].piperecvid[(shmaddr->users[recvid].writeEnd)% MAX_MSG_NUM] = piperecvid;
 	shmaddr->users[recvid].writeEnd++;
 	unlock(semid);
 	kill(shmaddr->users[recvid].pid, SIGUSR1);
 }
 
-void broadcastmsg(ShareMemory *shmaddr, std::string msg){
+void broadcastmsg(ShareMemory *shmaddr, std::string msg, int sendid, int piperecvid, enum::MSGTYPES msgtype){
+	std::vector<int> receivers;
 	lock(semid);
-	std::vector<pid_t> pids;
 	for(int i=1;i<MAX_USERS;i++){
 		if(shmaddr->users[i].conn == true){
-			strcpy(shmaddr->users[i].msgbuffer[(shmaddr->users[i].writeEnd)% MAX_MSG_NUM], msg.c_str());
-			shmaddr->users[i].writeEnd++;
-			pids.push_back(shmaddr->users[i].pid);
+			receivers.push_back(i);
 		}
 	}
 	unlock(semid);
-	for(auto pid: pids){
-		kill(pid, SIGUSR1);
+	for(auto recv: receivers){
+		sendmessages(shmaddr, recv, msg, sendid, piperecvid, msgtype);
 	}
 }
 
@@ -150,7 +152,7 @@ void changename(ShareMemory *shmaddr, int userid, std::string newname){
 		std::string port = std::to_string(shmaddr->users[userid].port);
 		std::string msg = "*** User from " + ip + ":" + port + " is named '" + newname + "'. ***\n";
 		unlock(semid);
-		broadcastmsg(shmaddr, msg);
+		broadcastmsg(shmaddr, msg, userid, 0, DEFAULT);
 	}else{
 		unlock(semid);
 		fprintf(stdout, "*** User '%s' already exists. ***\n", newname.c_str());
@@ -178,7 +180,7 @@ void yell(ShareMemory* shmaddr, int sendId, std::string msg){
 	std::string name(shmaddr->users[sendId].name);
 	unlock(semid);
 	std::string wholemsg = "*** " + name + " yelled ***: " + msg + "\n";
-	broadcastmsg(shmaddr, wholemsg);
+	broadcastmsg(shmaddr, wholemsg, sendId, 0, DEFAULT);
 }
 
 void tell(ShareMemory* shmaddr, int sendId, int recvId, std::string msg){
@@ -188,7 +190,7 @@ void tell(ShareMemory* shmaddr, int sendId, int recvId, std::string msg){
 		std::string sendername(shmaddr->users[sendId].name);
 		std::string wholemsg = "*** " + sendername + " told you ***: " + msg + "\n";
 		unlock(semid);
-		sendmessages(shmaddr, recvId, wholemsg);
+		sendmessages(shmaddr, recvId, wholemsg, sendId, 0, DEFAULT);
 	}else{
 		fprintf(stdout, "*** Error: user #%d does not exist yet. ***\n", recvId);
 	}
@@ -344,27 +346,27 @@ void SIGINT_handler(int signo){
 void SIGUSR1_handler(int signo){ // printout message
 	pid_t pid = getpid();
 	int userid = findUserIDbyPid(shmaddr, pid);
-	// !!DONT LOCK
-	// lock(semid);
+	// DONT LOCK
 	while(shmaddr->users[userid].readEnd < shmaddr->users[userid].writeEnd){
 		fprintf(stdout, "%s", shmaddr->users[userid].msgbuffer[(shmaddr->users[userid].readEnd) % MAX_MSG_NUM]);
 		fflush(stdout);
+		enum::MSGTYPES msgtype = shmaddr->users[userid].msgtypes[(shmaddr->users[userid].readEnd) % MAX_MSG_NUM];
+		int piperecvid = shmaddr->users[userid].piperecvid[(shmaddr->users[userid].readEnd) % MAX_MSG_NUM];
+		int sendid = shmaddr->users[userid].msgsenderid[(shmaddr->users[userid].readEnd) % MAX_MSG_NUM];
+		if(msgtype == JUST_PIPED && piperecvid == userid){
+			shmaddr->userPipeManager[sendid][userid].recvfd = open(
+				shmaddr->userPipeManager[sendid][userid].FIFOname, O_RDONLY );
+		}else if(msgtype == LOGOUT){
+			if(shmaddr->userPipeManager[sendid][userid].exist){
+				close(shmaddr->userPipeManager[sendid][userid].recvfd);
+				shmaddr->userPipeManager[sendid][userid].exist = false;
+			}
+			if(shmaddr->userPipeManager[userid][sendid].exist){
+				shmaddr->userPipeManager[userid][sendid].exist = false;
+			}
+		}
 		shmaddr->users[userid].readEnd++;
 	}
-	// unlock(semid);
-}
-
-// https://stackoverflow.com/questions/19140892/strange-sigaction-and-getline-interaction
-void SIGUSR2_handler(int signo, siginfo_t *info, void *context){
-	pid_t sendpid = info->si_pid;
-	pid_t recvpid = getpid();
-	int senderid = findUserIDbyPid(shmaddr, sendpid);
-	int recvid = findUserIDbyPid(shmaddr, recvpid);
-	// !!DONT LOCK
-	// lock(semid); 
-	shmaddr->userPipeManager[senderid][recvid].recvfd = open(
-		shmaddr->userPipeManager[senderid][recvid].FIFOname, O_RDONLY );
-	// unlock(semid);
 }
 
 std::deque<pid_t> ExecCMD(std::map<int, NumberPipeInfo> & pipeManager,

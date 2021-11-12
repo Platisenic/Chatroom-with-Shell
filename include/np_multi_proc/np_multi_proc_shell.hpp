@@ -93,12 +93,14 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 			if(findandparseuserpipeCMD(parsed_line_input, senderid, recvid)){
 				if(senderid != 0){ // receive message
 					if(!checkuserexist(shmaddr, senderid)){
-						sendmessages(shmaddr, userid, userpipeerrorusernotexist(senderid));
+						fprintf(stdout, "%s", userpipeerrorusernotexist(senderid).c_str());
+						fflush(stdout);
 						stdin_fd = devnullfd;
 					}else{
 						findFIFO3 = checkuserpipeexists(shmaddr, senderid, userid);
 						if(findFIFO3 == ""){
-							sendmessages(shmaddr, userid, userpipeerrorpipenotexist(senderid, userid));
+							fprintf(stdout, "%s", userpipeerrorpipenotexist(senderid, userid).c_str());
+							fflush(stdout);
 							stdin_fd = devnullfd;
 						}else{
 							lock(semid);
@@ -106,18 +108,20 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 							shmaddr->userPipeManager[senderid][userid].exist = false;
 							unlock(semid);
 							instream_case = USERPIPE_CASE;
-							broadcastmsg(shmaddr, userpiperecvmsg(shmaddr, senderid, userid, line_input));
+							broadcastmsg(shmaddr, userpiperecvmsg(shmaddr, senderid, userid, line_input), userid, 0, DEFAULT);
 						}
 					}
 				}
 				if(recvid != 0){ // send message
 					if(!checkuserexist(shmaddr, recvid)){
-						sendmessages(shmaddr, userid, userpipeerrorusernotexist(recvid));
+						fprintf(stdout, "%s", userpipeerrorusernotexist(recvid).c_str());
+						fflush(stdout);
 						stdout_fd = devnullfd;
 					}else{
 						findFIFO4 = checkuserpipeexists(shmaddr, userid, recvid);
 						if(findFIFO4 != ""){
-							sendmessages(shmaddr, userid, userpipeerrorpipeexist(userid, recvid));
+							fprintf(stdout, "%s", userpipeerrorpipeexist(userid, recvid).c_str());
+							fflush(stdout);
 							stdout_fd = devnullfd;
 						}else{
 							std::string sender = std::to_string(userid);
@@ -127,13 +131,11 @@ void shell(ShareMemory* shmaddr, int userid, int serverlogfd){
 							lock(semid);
 							strcpy(shmaddr->userPipeManager[userid][recvid].FIFOname, wholefile.c_str());
 							shmaddr->userPipeManager[userid][recvid].exist = true;
-							pid_t recvpid = shmaddr->users[recvid].pid;
 							unlock(semid);
-							kill(recvpid, SIGUSR2);
+							broadcastmsg(shmaddr, userpipesendmsg(shmaddr, userid, recvid, line_input), userid, recvid, JUST_PIPED);
 							stdout_fd = open(wholefile.c_str(), O_WRONLY);
 							outstream_case = USERPIPE_CASE;
 							findFIFO4 = wholefile;
-							broadcastmsg(shmaddr, userpipesendmsg(shmaddr, userid, recvid, line_input));
 						}
 					}
 				}

@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall -Iinclude -g -std=c++11
+CFLAGS = -Wall -Iinclude -O2 -std=c++11
 OBJDIR = obj
 LIBDIR = lib
 

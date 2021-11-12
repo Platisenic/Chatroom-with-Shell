@@ -23,19 +23,12 @@ int main(int argc, char const *argv[]){
 	int addrlen = sizeof(address);
 	pid_t pid;
 	int opt = 1;
-	int serverlogfd;
     char defaultname[] = "(no name)";
 	
 	//  signal handler //
 	if(signal(SIGCHLD, SIGCHLD_handler) == SIG_ERR) { perror("signal error"); }
 	if(signal(SIGINT, SIGINT_handler) == SIG_ERR) { perror("signal error"); }
 	if(signal(SIGUSR1, SIGUSR1_handler) == SIG_ERR) { perror("signal error"); }
-
-	struct sigaction act;
-	memset(&act, 0, sizeof(act));
-	act.sa_sigaction =  SIGUSR2_handler;
-	act.sa_flags = SA_SIGINFO | SA_RESTART;
-	if(sigaction(SIGUSR2, &act, NULL) < 0) { perror("signal error"); }
 
 	// create share memory and semaphore //
     shmid = shmget(IPC_PRIVATE, sizeof(ShareMemory), IPC_CREAT | 0600);
@@ -95,19 +88,9 @@ int main(int argc, char const *argv[]){
 				0,
 				0);
 			fprintf(stdout, "%s", welcomemsg().c_str());
-			broadcastmsg(shmaddr, loginmsg(shmaddr, minid));
+			broadcastmsg(shmaddr, loginmsg(shmaddr, minid), minid, 0, DEFAULT);
 			shell(shmaddr, minid, serverlogfd);
-			broadcastmsg(shmaddr, logoutmsg(shmaddr, minid));
-			lock(semid);
-			for(int i=0;i<MAX_USERS;i++){
-				for(int j=0;j<MAX_USERS;j++){
-					if(shmaddr->userPipeManager[i][j].exist){
-						shmaddr->userPipeManager[i][j].exist = false;
-						close(shmaddr->userPipeManager[i][j].recvfd);
-					}
-				}
-			}
-			unlock(semid);
+			broadcastmsg(shmaddr, logoutmsg(shmaddr, minid), minid, 0, LOGOUT);
 			shmdt(shmaddr);
 			close(serverlogfd);
 			_exit(EXIT_SUCCESS);
