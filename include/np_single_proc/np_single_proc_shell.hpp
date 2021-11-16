@@ -168,7 +168,7 @@ void shell(std::vector<UserInfo> &users, int userid, int serverlogfd){
 		}
 
 		if(findandparsefileoutredirect(parsed_line_input, filename)){
-			stdout_fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			stdout_fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
 			outstream_case = FILEOUTPUT_CASE;
 		}
 
