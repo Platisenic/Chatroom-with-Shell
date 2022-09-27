@@ -1,4 +1,4 @@
-# Chatroom-with-Shell
+# Online Chatroom with Shell
 
 ### Shell
 
@@ -39,7 +39,7 @@ In server 2 and 3:
 1. Build from source
 
    ```shell
-   cd Chatroom-with-Shell
+   cd online-chatroom-with-shell
    make
    ```
 
